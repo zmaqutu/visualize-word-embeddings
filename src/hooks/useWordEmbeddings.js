@@ -1,8 +1,4 @@
 import { useState, useEffect } from 'react';
-import { loadTensor } from '../utils/tensorLoader';
-import { loadWords } from '../utils/wordLoader';
-import { pcaReducer } from '../utils/pcaReducer';
-
 
 const useWordEmbeddings = () => {
 	const [embeddings, setEmbeddings] = useState(null);  // To store tensors
@@ -10,30 +6,28 @@ const useWordEmbeddings = () => {
 	const [error, setError] = useState(null);            // Error state
 
 	useEffect(() => {
-		// Function to load the word2vec .bytes tensor file
+		// Load the embeddings from the worker
 		const loadEmbeddings = async () => {
 			try {
 				setLoading(true);
 
-				// Load the word embeddings tensor
-				const tensor = await loadTensor('/word2vec_10000_200d_tensors.bytes');
+				const embeddingWorker = new Worker(new URL('../workers/embeddingWorker.js', import.meta.url), { type: 'module' });
 
-				// perform PCA to reduce dimensions to 3 components for 3D visualization
-				const reducedVector = await pcaReducer(tensor);
-				console.log('reducedVector[1]', reducedVector[1])
+				embeddingWorker.postMessage({
+					tensorUrl: '/word2vec_10000_200d_tensors.bytes',
+					tsvUrl: '/word2vec_10000_200d_labels.tsv',
+				});
 
-				// Load (word list) from the .tsv file
-				const wordList = await loadWords('/word2vec_10000_200d_labels.tsv');
+				embeddingWorker.onmessage = (event) => {
+					if (event.data.wordEmbeddings) {
+						setEmbeddings(event.data.wordEmbeddings);
+						setLoading(false);
+					} else {
+						throw new Error('Embeddings could not be loaded.');
+					}
+					embeddingWorker.terminate();
+				};
 
-				const wordEmbeddings = wordList.map((word, index) => ({
-					word,
-					originalVector: tensor.slice([index, 0], [1, 200]).dataSync(),
-					reducedVector: reducedVector[index],
-				}));
-
-				setEmbeddings(wordEmbeddings);
-
-				setLoading(false);
 			} catch (err) {
 				console.error('Error loading embeddings:', err);
 				setError(err);
