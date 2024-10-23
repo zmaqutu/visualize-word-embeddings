@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { loadTensor } from './utils/tensorLoader';
+import { loadTensor } from '../utils/tensorLoader';
+import { loadWords } from '../utils/wordLoader';
+import { pcaReducer } from '../utils/pcaReducer';
 
 
 const useWordEmbeddings = () => {
 	const [embeddings, setEmbeddings] = useState(null);  // To store tensors
-	const [words, setWords] = useState([]);              // To store word labels
 	const [loading, setLoading] = useState(true);        // Loading state
 	const [error, setError] = useState(null);            // Error state
 
@@ -17,14 +18,20 @@ const useWordEmbeddings = () => {
 				// Load the word embeddings tensor
 				const tensor = await loadTensor('/word2vec_10000_200d_tensors.bytes');
 
-				setEmbeddings(tensor);
+				// perform PCA to reduce dimensions to 3 components for 3D visualization
+				const reducedVector = await pcaReducer(tensor);
+				console.log('reducedVector[1]', reducedVector[1])
 
-				// Load the metadata (word list) from the .tsv file
-				const metadataResponse = await fetch('/word2vec_10000_200d_labels.tsv');
-				const metadataText = await metadataResponse.text();
-				const wordList = metadataText.trim().split('\n').slice(1).map(line => line.split('\t')[0]);
+				// Load (word list) from the .tsv file
+				const wordList = await loadWords('/word2vec_10000_200d_labels.tsv');
 
-				setWords(wordList);
+				const wordEmbeddings = wordList.map((word, index) => ({
+					word,
+					originalVector: tensor.slice([index, 0], [1, 200]).dataSync(),
+					reducedVector: reducedVector[index],
+				}));
+
+				setEmbeddings(wordEmbeddings);
 
 				setLoading(false);
 			} catch (err) {
@@ -37,7 +44,8 @@ const useWordEmbeddings = () => {
 		loadEmbeddings();
 	}, []);
 
-	return { embeddings, words, loading, error };
+	return { embeddings, loading, error };
 };
 
 export default useWordEmbeddings;
+// embedding: tensor.slice([index, 0], [1, -1]),
