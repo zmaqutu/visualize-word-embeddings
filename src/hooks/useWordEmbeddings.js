@@ -14,8 +14,8 @@ const useWordEmbeddings = () => {
 				const embeddingWorker = new Worker(new URL('../workers/embeddingWorker.js', import.meta.url), { type: 'module' });
 
 				embeddingWorker.postMessage({
-					tensorUrl: '/word2vec_10000_200d_tensors.bytes',
-					tsvUrl: '/word2vec_10000_200d_labels.tsv',
+					tensorUrl: '/visualize-word-embeddings/word2vec_10000_200d_tensors.bytes',
+					tsvUrl: '/visualize-word-embeddings/word2vec_10000_200d_labels.tsv',
 				});
 
 				embeddingWorker.onmessage = (event) => {
