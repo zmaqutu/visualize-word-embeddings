@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import * as tf from '@tensorflow/tfjs';
+import { loadTensor } from './utils/tensorLoader';
+
 
 const useWordEmbeddings = () => {
 	const [embeddings, setEmbeddings] = useState(null);  // To store tensors
@@ -13,10 +14,8 @@ const useWordEmbeddings = () => {
 			try {
 				setLoading(true);
 
-				// Load the tensor from the binary file using TensorFlow.js
-				const response = await fetch('/word2vec_10000_200d_tensors.bytes');
-				const arrayBuffer = await response.arrayBuffer();
-				const tensor = tf.tensor(new Float32Array(arrayBuffer), [10000, 200]); // Shape: [10000, 200]
+				// Load the word embeddings tensor
+				const tensor = await loadTensor('/word2vec_10000_200d_tensors.bytes');
 
 				setEmbeddings(tensor);
 
