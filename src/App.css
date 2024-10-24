@@ -12,12 +12,8 @@ body,
 }
 
 body {
-  // background-color: #f1f4f8;
   background-color: #181c20;
   /*  Selected Dark Gray */
-  // background-color: #373c4b;
-  // background-color: brown;
-  // background-color: #ad3d3d; /* Light Gray */
   position: fixed;
 }
 
