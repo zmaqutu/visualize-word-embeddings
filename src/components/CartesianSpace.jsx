@@ -21,6 +21,11 @@ function CartesianSpace({ embeddings }) {
 		if (!memoizedEmbeddings) return null;
 		const geometry = new THREE.SphereGeometry(0.5); // Sphere geometry for visualization
 		const material = new THREE.MeshStandardMaterial({ color: 'yellow' });
+		// const material = new THREE.MeshStandardMaterial({
+		// 	color: 'yellow',  // Set color to yellow
+		// 	opacity: 0.75,     // Set opacity to 50%
+		// 	transparent: true, // Enable transparency
+		// });
 		const mesh = new THREE.InstancedMesh(geometry, material, memoizedEmbeddings.length);
 		wordEmbeddingsMeshRef.current = mesh; // Store the mesh in a ref
 
@@ -38,8 +43,6 @@ function CartesianSpace({ embeddings }) {
 	console.log('wordEmbeddingsMesh', wordEmbeddingsMesh);
 
 	const handlePointerDown = (event) => {
-		console.log('pointerDown')
-		// return;
 		pointer.current.x = (event.clientX / window.innerWidth) * 2 - 1;
 		pointer.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
 

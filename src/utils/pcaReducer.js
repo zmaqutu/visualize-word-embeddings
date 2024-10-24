@@ -17,7 +17,7 @@ export const pcaReducer = (tensor) => {
 		const reducedData = pca.predict(data, { nComponents: 3 }).data; // Reduce to 3 components
 
 		// Scale the reduced data for 3D visualization
-		const scaleFactor = 100; // Adjust this factor as needed
+		const scaleFactor = 80; // Adjust this factor as needed
 		const scaledData = reducedData.map(point => point.map(value => value * scaleFactor));
 
 		return scaledData;
