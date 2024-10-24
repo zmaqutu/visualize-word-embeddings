@@ -9,7 +9,6 @@ const useWordEmbeddings = () => {
 		// Load the embeddings from the worker
 		const loadEmbeddings = async () => {
 			try {
-				setLoading(true);
 
 				const embeddingWorker = new Worker(new URL('../workers/embeddingWorker.js', import.meta.url), { type: 'module' });
 
@@ -21,17 +20,17 @@ const useWordEmbeddings = () => {
 				embeddingWorker.onmessage = (event) => {
 					if (event.data.wordEmbeddings) {
 						setEmbeddings(event.data.wordEmbeddings);
-						setLoading(false);
 					} else {
 						throw new Error('Embeddings could not be loaded.');
 					}
 					embeddingWorker.terminate();
+					setLoading(false);
+
 				};
 
 			} catch (err) {
 				console.error('Error loading embeddings:', err);
 				setError(err);
-				setLoading(false);
 			}
 		};
 
