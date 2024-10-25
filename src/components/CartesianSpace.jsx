@@ -60,6 +60,13 @@ function CartesianSpace({ embeddings }) {
 			<ambientLight intensity={10} color={0xBBC2D0} />
 			{wordEmbeddingsMesh && <primitive object={wordEmbeddingsMesh} onPointerDown={handlePointerDown} />}
 			<axesHelper args={[150, 150, 150]} />
+			<mesh rotation={[Math.PI, Math.PI, 0]}>
+				<axesHelper args={[150, 150, 150]} />
+			</mesh>
+			<mesh rotation={[0, Math.PI, 0]}>
+				<axesHelper args={[150, 150, 150]} />
+			</mesh>
+			<gridHelper args={[300, 300]} />
 			<OrbitControls />
 			{/* <primitive object={axesHelper} /> */}
 		</>
