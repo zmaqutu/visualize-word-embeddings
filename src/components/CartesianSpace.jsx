@@ -1,8 +1,10 @@
-import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, StatsGl } from '@react-three/drei';
-import * as THREE from 'three'
+import { useThree } from '@react-three/fiber'
+import { Billboard, Text, OrbitControls } from '@react-three/drei';
+import * as THREE from 'three';
+import _ from 'lodash';
+import TextShader from './TextShader';
 
-import { useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 
 function CartesianSpace({ embeddings }) {
@@ -12,10 +14,20 @@ function CartesianSpace({ embeddings }) {
 	const wordEmbeddingsMeshRef = useRef();
 	const raycasterRef = useRef(new THREE.Raycaster());
 	const pointer = useRef(new THREE.Vector2());
-	// const axesHelper = new THREE.AxesHelper(200)
+
+	const [hoveredWord, setHoveredWord] = useState(null);
+	// const [hoveredPosition, setHoveredPosition] = useState(null);
+
+	const [hoveredInstance, setHoveredInstance] = useState(null);
 
 	// Get the camera from the Canvas context
 	const { camera } = useThree();
+
+	// Debounce hover state updates to optimize performance
+	const debouncedSetHoveredWord = useCallback(_.debounce((word, position) => {
+		setHoveredWord(word);
+		setHoveredPosition(position);
+	}, 10), []);
 
 	const wordEmbeddingsMesh = useMemo(() => {
 		if (!memoizedEmbeddings) return null;
@@ -40,6 +52,17 @@ function CartesianSpace({ embeddings }) {
 		return mesh;
 	}, [memoizedEmbeddings]);
 
+	const textTexture = useMemo(() => {
+		const canvas = document.createElement('canvas');
+		const context = canvas.getContext('2d');
+		context.font = '24px Arial';
+		context.fillStyle = 'white';
+		context.fillText(hoveredInstance !== null ? memoizedEmbeddings[hoveredInstance].word : '', 0, 24);
+		const texture = new THREE.Texture(canvas);
+		texture.needsUpdate = true;
+		return texture;
+	}, [hoveredInstance, memoizedEmbeddings]);
+
 	console.log('wordEmbeddingsMesh', wordEmbeddingsMesh);
 
 	const handlePointerDown = (event) => {
@@ -53,12 +76,26 @@ function CartesianSpace({ embeddings }) {
 			const instanceId = intersects[0].instanceId;
 			const clickedWord = memoizedEmbeddings[instanceId].word;
 			console.log('Clicked word:', clickedWord);
+
+			// const position = intersects[0].point;
+			// debouncedSetHoveredWord(clickedWord, position);
+			setHoveredInstance(instanceId);
+
+		} else {
+			// debouncedSetHoveredWord(null, null); // Clear on hover out
+			setHoveredInstance(null);
 		}
 	};
+	// Get the position of the hovered instance
+	const hoveredPosition = useMemo(() => {
+		if (hoveredInstance === null) return [0, 0, 0];
+		const { reducedVector } = memoizedEmbeddings[hoveredInstance];
+		return reducedVector; // Return the vector as the position
+	}, [hoveredInstance, memoizedEmbeddings]);
 	return (
 		<>
 			<ambientLight intensity={10} color={0xBBC2D0} />
-			{wordEmbeddingsMesh && <primitive object={wordEmbeddingsMesh} onPointerDown={handlePointerDown} />}
+			{wordEmbeddingsMesh && <primitive object={wordEmbeddingsMesh} onPointerOver={handlePointerDown} />}
 			<axesHelper args={[150, 150, 150]} />
 			<mesh rotation={[Math.PI, Math.PI, 0]}>
 				<axesHelper args={[150, 150, 150]} />
@@ -68,7 +105,13 @@ function CartesianSpace({ embeddings }) {
 			</mesh>
 			<gridHelper args={[300, 300]} />
 			<OrbitControls />
-			{/* <primitive object={axesHelper} /> */}
+			<TextShader isHovered={hoveredInstance !== null} textTexture={textTexture} position={hoveredPosition} />
+
+			{/* {hoveredWord && hoveredPosition && (
+				<Billboard position={[hoveredPosition.x, hoveredPosition.y + 5, hoveredPosition.z]} follow>
+					<Text fontSize={10} depthTest={false} color="red">{hoveredWord}</Text>
+				</Billboard>
+			)} */}
 		</>
 	)
 }
