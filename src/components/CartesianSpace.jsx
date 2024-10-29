@@ -15,9 +15,6 @@ function CartesianSpace({ embeddings, canvasRef }) {
 	const pointer = useRef(new THREE.Vector2());
 	const [selectedIndex, setSelectedIndex] = useState();
 
-	// const memoizedEmbeddings = useMemo(() => embeddings, [embeddings]);
-
-
 	const wordEmbeddingsMesh = useMemo(() => {
 		if (!embeddings) return null;
 		const geometry = new THREE.SphereGeometry(0.75); // Sphere geometry for visualization
@@ -30,55 +27,25 @@ function CartesianSpace({ embeddings, canvasRef }) {
 		const mesh = new THREE.InstancedMesh(geometry, material, embeddings.length);
 		wordEmbeddingsMeshRef.current = mesh; // Store the mesh in a ref
 
-		// for (let i = 0; i < 100; i++) {
-		// 	const matrix = new THREE.Matrix4();
-		// 	const { reducedVector } = embeddings[i];
-		// 	matrix.setPosition(new THREE.Vector3(reducedVector[0], reducedVector[1], reducedVector[2]));
-		// 	mesh.setMatrixAt(i, matrix);
-		// 	console.log(i)
-		// }
-		embeddings.forEach((embedding, i) => {
-			const { reducedVector } = embedding;
+		for (let i = 0; i < 100; i++) {
 			const matrix = new THREE.Matrix4();
-			matrix.setPosition(new THREE.Vector3(...reducedVector));
+			const { reducedVector } = embeddings[i];
+			matrix.setPosition(new THREE.Vector3(reducedVector[0], reducedVector[1], reducedVector[2]));
 			mesh.setMatrixAt(i, matrix);
-		});
+			console.log(i)
+		}
+		// embeddings.forEach((embedding, i) => {
+		// 	const { reducedVector } = embedding;
+		// 	const matrix = new THREE.Matrix4();
+		// 	matrix.setPosition(new THREE.Vector3(...reducedVector));
+		// 	mesh.setMatrixAt(i, matrix);
+		// });
 
 		mesh.instanceMatrix.needsUpdate = true; // Mark the instance matrix as needing update
 		return mesh;
 	}, [embeddings]);
 
 	console.log('wordEmbeddingsMesh', wordEmbeddingsMesh);
-
-	// useEffect(() => {
-	// 	if (!embeddings) return;
-	// 	if (embeddings && wordEmbeddingsMeshRef.current) {
-	// const devicePixelRatio = window.devicePixelRatio || 1;
-	// const xShift = 4;
-	// 		const canvas = document.getElementById('labelCanvas');
-	// 		const context = canvas.getContext('2d');
-	// 		context.clearRect(0, 0, canvas.width, canvas.height);
-
-	// 		// embeddings.forEach(embedding => {
-	// 		// 	const { reducedVector, word } = embedding;
-	// 		// 	const screenPosition = getScreenPosition(new THREE.Vector3(...reducedVector));
-	// 		// 	context.fillText(word, screenPosition.x, screenPosition.y);
-	// 		// });
-	// 		for (let i = 0; i < 100; i++) {
-	// 			const embedding = embeddings[i];
-	// 			const { reducedVector, word } = embedding;
-	// 			// const screenPosition = getScreenPosition(new THREE.Vector3(...reducedVector));
-	// 			const screenPosition = vector3DToScreenCoords(camera, window.innerWidth, window.innerHeight, new THREE.Vector3(...reducedVector));
-	// 			// context.fillStyle = 'black';
-	// 			// context.strokeStyle = 'black';
-	// 			context.lineWidth = 3;
-	// 			// context.strokeText(word, screenPosition.x, screenPosition.y);
-	// 			context.lineWidth = 6;
-	// 			context.fillText(word, screenPosition.x, screenPosition.y);
-	// 			console.log(camera.quaternion)
-	// 		}
-	// 	}
-	// }, [embeddings, camera]);
 
 	const handlePointerDown = (event) => {
 		pointer.current.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -105,14 +72,7 @@ function CartesianSpace({ embeddings, canvasRef }) {
 		const xShift = 4;
 		const ctx = canvasRef.current.getContext('2d');
 		ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-
-		// memoizedEmbeddings.forEach((embedding) => {
-		// 	const { reducedVector, word } = embedding;
-		// 	const screenPos = vector3DToScreenCoords(camera, size.width, size.height, new THREE.Vector3(...reducedVector));
-
-		// 	// Draw the label at the calculated screen position
-		// 	ctx.fillText(word, screenPos.x, screenPos.y);
-		// });
+		ctx.font = '12px roboto';
 		for (let i = 0; i < 100; i++) {
 			const embedding = embeddings[i];
 			const { reducedVector, word } = embedding;
