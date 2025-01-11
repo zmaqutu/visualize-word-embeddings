@@ -41,20 +41,8 @@ function EmbeddingViewer() {
 	return (
 		<>
 			<a.div
+				className={`absolute top-0 left-0 w-full h-full flex justify-center items-center text-white z-50 bg-[hsla(206,95%,15%,1)] font-mono`}
 				style={{
-					position: 'absolute',
-					top: 0,
-					left: 0,
-					width: '100%',
-					height: '100%',
-					display: 'flex',
-					justifyContent: 'center',
-					alignItems: 'center',
-					color: '#fff',
-					zIndex: 1000,
-					// backgroundColor: 'rgba(0, 0, 0, 1)',
-					backgroundColor: 'hsla(206, 95%, 15%, 1)',
-					fontFamily: 'Fragment Mono,',
 					...loaderProps,
 				}}
 			>
