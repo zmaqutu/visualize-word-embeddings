@@ -2,6 +2,7 @@ import CartesianSpace from '../components/CartesianSpace';
 import useWordEmbeddings from '../hooks/useWordEmbeddings';
 import { Canvas } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
+import { useSpring, a } from '@react-spring/web';
 
 function EmbeddingViewer() {
 	const { embeddings, loading, error } = useWordEmbeddings();
@@ -11,6 +12,12 @@ function EmbeddingViewer() {
 	let height = window.innerHeight;
 
 	const cameraPosition = useRef([100, 200, 300]);
+
+	const loaderProps = useSpring({
+		opacity: loading ? 1 : 0,
+		transform: loading ? 'translateY(0%)' : 'translateY(-100%)',
+		config: { tension: 170, friction: 26 },
+	});
 
 	useEffect(() => {
 		const handleResize = () => {
@@ -24,14 +31,35 @@ function EmbeddingViewer() {
 		return () => window.removeEventListener('resize', handleResize);
 	}, []);
 
+	console.log('loading', loading);
+
 
 
 	// if (loading) return <div>Loading...</div>;
 	// if (error) return <div>Error loading embeddings: {error.message}</div>;
 
-	console.log('embeddings', embeddings);
 	return (
 		<>
+			<a.div
+				style={{
+					position: 'absolute',
+					top: 0,
+					left: 0,
+					width: '100%',
+					height: '100%',
+					display: 'flex',
+					justifyContent: 'center',
+					alignItems: 'center',
+					color: '#fff',
+					zIndex: 1000,
+					// backgroundColor: 'rgba(0, 0, 0, 1)',
+					backgroundColor: 'hsla(206, 95%, 15%, 1)',
+					fontFamily: 'Fragment Mono,',
+					...loaderProps,
+				}}
+			>
+				<p>Loading</p>
+			</a.div>
 			<Canvas
 				camera={{ position: cameraPosition.current, fov: 53, aspect: width / height, near: 1, far: 5000 }}>
 				<CartesianSpace embeddings={embeddings} canvasRef={canvasRef} />

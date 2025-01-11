@@ -3,10 +3,10 @@ import * as THREE from 'three';
 /**
  * Converts a 3D vector to 2D screen coordinates.
  *
- * @param {THREE.Camera} cam - The camera used to view the 3D scene.
- * @param {number} w - The width of the screen or canvas.
- * @param {number} h - The height of the screen or canvas.
- * @param {THREE.Vector3} v - The 3D vector to convert.
+ * @param {THREE.Camera} camera - The camera used to view the 3D scene.
+ * @param {number} width - The width of the screen or canvas.
+ * @param {number} height - The height of the screen or canvas.
+ * @param {THREE.Vector3} positionVector - The 3D vector to convert.
  * @returns {{x: number, y: number}} The 2D screen coordinates.
  */
 export function vector3DToScreenCoords(camera, width, height, positionVector) {

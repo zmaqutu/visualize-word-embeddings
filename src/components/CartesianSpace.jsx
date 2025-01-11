@@ -13,7 +13,7 @@ function CartesianSpace({ embeddings, canvasRef }) {
 	const wordEmbeddingsMeshRef = useRef();
 	const raycasterRef = useRef(new THREE.Raycaster());
 	const pointer = useRef(new THREE.Vector2());
-	const [selectedIndex, setSelectedIndex] = useState();
+	const [selectedIndices, setSelectedIndices] = useState([]);
 
 	const wordEmbeddingsMesh = useMemo(() => {
 		if (!embeddings) return null;
@@ -27,12 +27,12 @@ function CartesianSpace({ embeddings, canvasRef }) {
 		const mesh = new THREE.InstancedMesh(geometry, material, embeddings.length);
 		wordEmbeddingsMeshRef.current = mesh; // Store the mesh in a ref
 
-		for (let i = 0; i < 100; i++) {
+		for (let i = 0; i < 1000; i++) {
 			const matrix = new THREE.Matrix4();
 			const { reducedVector } = embeddings[i];
 			matrix.setPosition(new THREE.Vector3(reducedVector[0], reducedVector[1], reducedVector[2]));
 			mesh.setMatrixAt(i, matrix);
-			console.log(i)
+			// console.log(i)
 		}
 		// embeddings.forEach((embedding, i) => {
 		// 	const { reducedVector } = embedding;
@@ -45,9 +45,9 @@ function CartesianSpace({ embeddings, canvasRef }) {
 		return mesh;
 	}, [embeddings]);
 
-	console.log('wordEmbeddingsMesh', wordEmbeddingsMesh);
+	// console.log('wordEmbeddingsMesh', wordEmbeddingsMesh);
 
-	const handlePointerDown = (event) => {
+	const handlePointerHover = (event) => {
 		pointer.current.x = (event.clientX / window.innerWidth) * 2 - 1;
 		pointer.current.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -58,35 +58,60 @@ function CartesianSpace({ embeddings, canvasRef }) {
 			const instanceId = intersects[0].instanceId;
 			const clickedWord = embeddings[instanceId].word;
 			console.log('Clicked word:', clickedWord);
-			setSelectedIndex(instanceId);
+			// setSelectedIndex(instanceId);
+			// setSelectedIndices((prev) => {
+			// 	if (prev.includes(instanceId)) {
+			// 		return prev.filter((index) => index !== instanceId);
+			// 	}
+			// 	return [...prev, instanceId];
+			// });
+			selectedIndices.push(instanceId);
 			wordEmbeddingsMesh.setColorAt(instanceId, new THREE.Color('red'));
 			wordEmbeddingsMesh.instanceColor.needsUpdate = true;
 
 		}
 	};
+	const handlePointerLeave = () => {
+		setSelectedIndices([]);
+		const ctx = canvasRef.current.getContext('2d');
+		ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+		// selectedIndices.pop();
+	}
+
+	// console.log('selectedIndices', selectedIndices);
 
 	useFrame(() => {
-		if (!embeddings || !canvasRef.current) return;
+		if (!embeddings || !canvasRef.current || selectedIndices.length === 0) return;
 
 		const devicePixelRatio = window.devicePixelRatio || 1;
 		const xShift = 4;
 		const ctx = canvasRef.current.getContext('2d');
 		ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
 		ctx.font = '12px roboto';
-		for (let i = 0; i < 100; i++) {
-			const embedding = embeddings[i];
+		// for (let i = 0; i < selectedIndices.length; i++) {
+		// 	const embedding = embeddings[i];
+		// 	const { reducedVector, word } = embedding;
+		// 	const screenPosition = vector3DToScreenCoords(camera, window.innerWidth, window.innerHeight, new THREE.Vector3(...reducedVector));
+		// 	// ctx.fillStyle = 'black';
+		// 	// ctx.strokeStyle = 'white';
+		// 	ctx.lineWidth = 6;
+		// 	ctx.fillText(word, screenPosition.x, screenPosition.y);
+		// }
+		selectedIndices.forEach((index, i) => {
+			const embedding = embeddings[index];
 			const { reducedVector, word } = embedding;
 			const screenPosition = vector3DToScreenCoords(camera, window.innerWidth, window.innerHeight, new THREE.Vector3(...reducedVector));
 			// ctx.fillStyle = 'black';
 			// ctx.strokeStyle = 'white';
 			ctx.lineWidth = 6;
-			ctx.fillText(word, screenPosition.x, screenPosition.y);
-		}
+			ctx.fillText(word, screenPosition.x + xShift, screenPosition.y);
+			// ctx.strokeText(word, screenPosition.x + xShift, screenPosition.y);
+		});
 	});
 	return (
 		<>
 			<ambientLight intensity={10} color={0xBBC2D0} />
-			{wordEmbeddingsMesh && <primitive object={wordEmbeddingsMesh} onPointerOver={handlePointerDown} />}
+			{wordEmbeddingsMesh && <primitive object={wordEmbeddingsMesh} onPointerOver={handlePointerHover} onPointerLeave={handlePointerLeave} />}
 			<axesHelper args={[150, 150, 150]} />
 			<mesh rotation={[Math.PI, Math.PI, 0]}>
 				<axesHelper args={[150, 150, 150]} />

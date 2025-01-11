@@ -12,7 +12,8 @@ body,
 }
 
 body {
-  background-color: #181c20;
+  /* background-color: #181c20; */
+  background-color: hsla(206, 95%, 15%, 1);
   /*  Selected Dark Gray */
   position: fixed;
 }
