@@ -1,4 +1,5 @@
 import CartesianSpace from '../components/CartesianSpace';
+import LoadingScreen from '../components/LoadingScreen';
 import useWordEmbeddings from '../hooks/useWordEmbeddings';
 import { Canvas } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
@@ -18,6 +19,7 @@ function EmbeddingViewer() {
 		transform: loading ? 'translateY(0%)' : 'translateY(-100%)',
 		config: { tension: 170, friction: 26 },
 	});
+
 
 	useEffect(() => {
 		const handleResize = () => {
@@ -41,12 +43,12 @@ function EmbeddingViewer() {
 	return (
 		<>
 			<a.div
-				className={`absolute top-0 left-0 w-full h-full flex justify-center items-center text-white z-50 bg-[hsla(206,95%,15%,1)] font-mono`}
+				className={`absolute top-0 left-0 w-full h-full flex justify-center items-center text-white bg-[hsla(206,95%,15%,1)] font-mono z-50`}
 				style={{
 					...loaderProps,
 				}}
 			>
-				<p>Loading</p>
+				<LoadingScreen />
 			</a.div>
 			<Canvas
 				camera={{ position: cameraPosition.current, fov: 53, aspect: width / height, near: 1, far: 5000 }}>
