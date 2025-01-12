@@ -1,7 +1,7 @@
 // import { useSpring, a } from '@react-spring/web';
 import { OrbitControls } from '@react-three/drei';
 import { Canvas } from '@react-three/fiber';
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import Spinner from './Spinner';
 
 
@@ -12,6 +12,10 @@ function LoadingScreen() {
 	let width = window.innerWidth;
 	let height = window.innerHeight;
 	const cameraPosition = useRef([100, 0, 0]);
+
+	useEffect(() => {
+		return () => console.log('unmounting LoadingScreen');
+	}, []);
 
 
 	return (

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Trail, Sphere } from '@react-three/drei';
 
@@ -15,17 +15,11 @@ function Spinner() {
 		group.current.rotation.z = time
 
 		spinnerRef.current.position.z = Math.cos(time * 2) * 20
-		// if(animateLines){
-		//         lineRef.current.forEach((r, i) => {
-		//         r.color.setRGB(1,1,0)
-		//         })
-		// }
 	})
+	useEffect(() => {
+		return () => console.log('unmounting Spinner');
+	}, []);
 	return (
-		// <mesh>
-		// 	<boxGeometry args={[10, 10, 10]} />
-		// 	<meshStandardMaterial color="yellow" />
-		// </mesh>
 		<group ref={group}>
 			<Trail
 				width={15}
