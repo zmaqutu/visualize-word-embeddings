@@ -1,20 +1,29 @@
-import * as tf from '@tensorflow/tfjs';
-
 /**
  * Loads the word embeddings tensor from the .bytes file.
  * @param {string} filePath - The path to the .bytes file.
- * @returns {Promise<tf.Tensor>} - A promise that resolves with the tensor.
+ * @param {number} vectorDimensions - The number of dimensions per word vector.
+ * @returns {Promise<{ values: Float32Array, shape: [number, number], dispose: () => void }>}
  */
-export const loadTensor = async (filePath) => {
+export const loadTensor = async (filePath, vectorDimensions = 200) => {
 	try {
-		// Fetch the binary data from the .bytes file
 		const response = await fetch(filePath);
+		if (!response.ok) {
+			throw new Error(`Unable to fetch tensor file (${response.status})`);
+		}
+
 		const arrayBuffer = await response.arrayBuffer();
+		const values = new Float32Array(arrayBuffer);
+		const wordCount = values.length / vectorDimensions;
 
-		// Convert to Float32Array and create a tensor with shape [10000, 200]
-		const tensor = tf.tensor(new Float32Array(arrayBuffer), [10000, 200]);
+		if (!Number.isInteger(wordCount)) {
+			throw new Error('Tensor byte length does not match the expected vector shape.');
+		}
 
-		return tensor;
+		return {
+			values,
+			shape: [wordCount, vectorDimensions],
+			dispose: () => undefined,
+		};
 	} catch (error) {
 		console.error('Error loading tensor:', error);
 		throw error;

@@ -45,7 +45,7 @@ function TextShader({ isHovered, textTexture, position }) {
     }, [isHovered, textTexture]);
 
     return (
-        <mesh position={position[0], position[1], position[2]} scale={10}> {/* Position the text above the spheres */}
+        <mesh position={position} scale={10}>
             <planeGeometry args={[5, 2]} />
             <primitive object={material} attach="material" ref={materialRef} />
         </mesh>

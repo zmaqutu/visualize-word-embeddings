@@ -3,27 +3,33 @@ import { loadWords } from '../utils/wordLoader';
 import { pcaReducer } from '../utils/pcaReducer';
 
 self.onmessage = async function (e) {
-	const { tensorUrl, tsvUrl } = e.data;
-	console.log('Inside Worker')
+	const { tensorUrl, tsvUrl, vectorDimensions = 200 } = e.data;
 
-	// Load the tensor
-	const tensor = await loadTensor(tensorUrl);
+	try {
+		self.postMessage({ status: 'Loading vector tensor' });
+		const tensor = await loadTensor(tensorUrl, vectorDimensions);
 
-	// Load the words list
-	const wordList = await loadWords(tsvUrl);
+		self.postMessage({ status: 'Loading word labels' });
+		const wordList = await loadWords(tsvUrl);
 
-	// Perform PCA
-	const reducedVector = await pcaReducer(tensor);
+		self.postMessage({ status: 'Projecting 200 dimensions into 3D' });
+		const reducedVectors = pcaReducer(tensor);
+		const count = Math.min(wordList.length, reducedVectors.length);
 
-	// Create the word embeddings map
-	const wordEmbeddings = wordList.map((word, index) => ({
-		word,
-		originalVector: tensor.slice([index, 0], [1, 200]).dataSync(),
-		reducedVector: reducedVector[index],
-	}));
+		const wordEmbeddings = Array.from({ length: count }, (_, index) => ({
+			id: index,
+			word: wordList[index],
+			reducedVector: reducedVectors[index],
+		}));
 
-	tensor.dispose()
+		self.postMessage({
+			wordEmbeddings,
+			vectorDimensions,
+			vectorValues: tensor.values,
+		}, [tensor.values.buffer]);
 
-	// Send the embeddings back to the main thread
-	self.postMessage({ wordEmbeddings });
+		tensor.dispose();
+	} catch (error) {
+		self.postMessage({ error: error.message || 'Embeddings could not be loaded.' });
+	}
 };
