@@ -163,6 +163,64 @@ export const findNearestNeighbors = ({
 	return nearest;
 };
 
+export const findSemanticPath = ({
+	start,
+	end,
+	embeddings,
+	vectorValues,
+	vectorDimensions,
+	vectorNorms,
+	bridgeCount = 3,
+}) => {
+	if (!start || !end || !vectorValues || vectorDimensions === 0) return [];
+
+	const excludedIds = new Set([start.id, end.id]);
+	const startOffset = start.id * vectorDimensions;
+	const endOffset = end.id * vectorDimensions;
+	const path = [start];
+
+	for (let bridgeIndex = 1; bridgeIndex <= bridgeCount; bridgeIndex += 1) {
+		const blend = bridgeIndex / (bridgeCount + 1);
+		const target = new Float32Array(vectorDimensions);
+		let targetNormSquared = 0;
+
+		for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+			const value = vectorValues[startOffset + dimension] * (1 - blend)
+				+ vectorValues[endOffset + dimension] * blend;
+			target[dimension] = value;
+			targetNormSquared += value * value;
+		}
+
+		const targetNorm = Math.sqrt(targetNormSquared) || 1;
+		let bestMatch = null;
+
+		for (let index = 0; index < embeddings.length; index += 1) {
+			if (excludedIds.has(index)) continue;
+
+			let dotProduct = 0;
+			const offset = index * vectorDimensions;
+
+			for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+				dotProduct += target[dimension] * vectorValues[offset + dimension];
+			}
+
+			const score = dotProduct / (targetNorm * (vectorNorms[index] || 1));
+
+			if (!bestMatch || score > bestMatch.score) {
+				bestMatch = { ...embeddings[index], score };
+			}
+		}
+
+		if (bestMatch) {
+			excludedIds.add(bestMatch.id);
+			path.push(bestMatch);
+		}
+	}
+
+	path.push(end);
+	return path;
+};
+
 export const solveAnalogy = ({
 	addLeft,
 	subtract,

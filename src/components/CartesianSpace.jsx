@@ -13,6 +13,7 @@ const ANALOGY_RESULT_COLOR = new THREE.Color('#34d399');
 const ANALOGY_CANDIDATE_COLOR = new THREE.Color('#c084fc');
 const COMPARE_WORD_COLOR = new THREE.Color('#fbbf24');
 const COMPARE_NEIGHBOR_COLOR = new THREE.Color('#76e4f7');
+const PATH_WORD_COLOR = new THREE.Color('#f472b6');
 const DIM_COLOR = new THREE.Color('#536170');
 
 const beamVertexShader = `
@@ -39,6 +40,8 @@ void main() {
 `;
 
 function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }) {
+	const shaftGroupRef = useRef();
+	const headGroupRef = useRef();
 	const beamMaterialRef = useRef();
 	const glowMaterialRef = useRef();
 	const tracerRef = useRef();
@@ -63,6 +66,7 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }
 			quaternion,
 			start,
 			end,
+			beamEnd: start.clone().lerp(end, 0.82),
 			headPosition: start.clone().lerp(end, 0.9),
 			headLength: Math.max(4.2, Math.min(8.5, length * 0.08)),
 			beamLength: Math.max(1, length * 0.82),
@@ -88,18 +92,35 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }
 			trailStartTimeRef.current = clock.elapsedTime;
 		}
 
+		const segmentDuration = variant === 'path' ? 1.55 : 1.18;
+		const segmentProgress = arrowParts
+			? THREE.MathUtils.clamp((clock.elapsedTime - trailStartTimeRef.current - delay) / segmentDuration, 0, 1)
+			: 0;
+		const easedProgress = 1 - ((1 - segmentProgress) ** 3);
+
+		if (shaftGroupRef.current && arrowParts) {
+			const currentBeamEnd = arrowParts.start.clone().lerp(arrowParts.beamEnd, easedProgress);
+			shaftGroupRef.current.position.copy(arrowParts.start.clone().lerp(currentBeamEnd, 0.5));
+			shaftGroupRef.current.scale.y = Math.max(easedProgress, 0.001);
+			shaftGroupRef.current.visible = easedProgress > 0.01;
+		}
+
+		if (headGroupRef.current && arrowParts) {
+			headGroupRef.current.position.copy(arrowParts.start.clone().lerp(arrowParts.headPosition, easedProgress));
+			headGroupRef.current.visible = easedProgress > 0.82;
+		}
+
 		if (beamMaterialRef.current) {
 			beamMaterialRef.current.uniforms.uTime.value = clock.elapsedTime * 0.55;
+			beamMaterialRef.current.uniforms.uOpacity.value = (variant === 'analogy' ? 0.98 : 0.82) * easedProgress;
 		}
 
 		if (glowMaterialRef.current) {
-			glowMaterialRef.current.opacity = (variant === 'analogy' ? 0.24 : 0.16)
-				+ Math.sin(clock.elapsedTime * 2.2) * 0.06;
+			glowMaterialRef.current.opacity = ((variant === 'analogy' ? 0.24 : 0.16)
+				+ Math.sin(clock.elapsedTime * 2.2) * 0.06) * easedProgress;
 		}
 
 		if (tracerRef.current && arrowParts) {
-			const segmentProgress = THREE.MathUtils.clamp((clock.elapsedTime - trailStartTimeRef.current - delay) / 1.18, 0, 1);
-			const easedProgress = 1 - ((1 - segmentProgress) ** 3);
 			tracerRef.current.position.lerpVectors(arrowParts.start, arrowParts.end, easedProgress);
 		}
 	});
@@ -108,7 +129,7 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }
 
 	return (
 		<>
-			<group position={arrowParts.midpoint} quaternion={arrowParts.quaternion}>
+			<group ref={shaftGroupRef} position={arrowParts.midpoint} quaternion={arrowParts.quaternion}>
 				<mesh>
 					<cylinderGeometry args={[variant === 'analogy' ? 1.15 : 0.8, variant === 'analogy' ? 1.15 : 0.8, arrowParts.beamLength, 32, 1, true]} />
 					<meshBasicMaterial
@@ -132,7 +153,7 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }
 					/>
 				</mesh>
 			</group>
-			<group position={arrowParts.headPosition} quaternion={arrowParts.quaternion}>
+			<group ref={headGroupRef} position={arrowParts.headPosition} quaternion={arrowParts.quaternion}>
 				<mesh position={[0, arrowParts.headLength / 2, 0]}>
 					<coneGeometry args={[variant === 'analogy' ? 2.6 : 2.1, arrowParts.headLength, 3]} />
 					<meshBasicMaterial color={color} transparent opacity={0.96} />
@@ -169,6 +190,8 @@ function CartesianSpace({
 	compareWordIds = [],
 	compareNeighborIds = [],
 	compareLinks = [],
+	pathWordIds = [],
+	pathLinks = [],
 	analogyRevealStep = 0,
 	analogyPresentationDone = false,
 	presentationRunId = 0,
@@ -209,9 +232,14 @@ function CartesianSpace({
 		return new Set(compareNeighborIds);
 	}, [compareNeighborIds]);
 
+	const pathWordIdSet = useMemo(() => {
+		return new Set(pathWordIds);
+	}, [pathWordIds]);
+
+	const isPathFocusMode = pathWordIds.length > 0;
 	const isCompareFocusMode = compareWordIds.length > 0;
 	const isAnalogyFocusMode = Number.isInteger(analogyResultId);
-	const isFocusMode = isAnalogyFocusMode || isCompareFocusMode;
+	const isFocusMode = isAnalogyFocusMode || isCompareFocusMode || isPathFocusMode;
 	const focusProgressRef = useRef(0);
 
 	const renderedEmbeddings = useMemo(() => {
@@ -219,6 +247,10 @@ function CartesianSpace({
 			return visibleEmbeddings.filter((embedding) => (
 				compareWordIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id)
 			));
+		}
+
+		if (isPathFocusMode) {
+			return visibleEmbeddings.filter((embedding) => pathWordIdSet.has(embedding.id));
 		}
 
 		if (!isAnalogyFocusMode || !analogyPresentationDone) return visibleEmbeddings;
@@ -233,6 +265,8 @@ function CartesianSpace({
 		compareWordIdSet,
 		isCompareFocusMode,
 		isAnalogyFocusMode,
+		isPathFocusMode,
+		pathWordIdSet,
 		visibleCandidateIdSet,
 		visibleEmbeddings,
 	]);
@@ -291,6 +325,7 @@ function CartesianSpace({
 			const isVisibleCandidate = visibleCandidateIdSet.has(embeddingId);
 			const isCompareWord = compareWordIdSet.has(embeddingId);
 			const isCompareNeighbor = compareNeighborIdSet.has(embeddingId);
+			const isPathWord = pathWordIdSet.has(embeddingId);
 			const isActive = embeddingId === selectedId
 				|| embeddingId === hoveredId
 				|| embeddingId === searchId
@@ -298,7 +333,8 @@ function CartesianSpace({
 				|| isAnalogyResult
 				|| isVisibleCandidate
 				|| isCompareWord
-				|| isCompareNeighbor;
+				|| isCompareNeighbor
+				|| isPathWord;
 			const color = embeddingId === selectedId
 				? SELECTED_COLOR
 				: embeddingId === hoveredId
@@ -315,18 +351,21 @@ function CartesianSpace({
 										? COMPARE_WORD_COLOR
 										: isCompareNeighbor
 											? COMPARE_NEIGHBOR_COLOR
-											: (selectedId !== null && selectedId !== undefined)
-												|| (searchId !== null && searchId !== undefined)
-												|| analogyIdSet.size > 0
-												|| compareWordIdSet.size > 0
-												? DIM_COLOR
-												: BASE_COLOR;
+											: isPathWord
+												? PATH_WORD_COLOR
+												: (selectedId !== null && selectedId !== undefined)
+													|| (searchId !== null && searchId !== undefined)
+													|| analogyIdSet.size > 0
+													|| compareWordIdSet.size > 0
+													|| pathWordIdSet.size > 0
+													? DIM_COLOR
+													: BASE_COLOR;
 
 			position.set(...renderedEmbeddings[index].reducedVector);
 			const inactiveFocusScale = isFocusMode && !isActive
 				? THREE.MathUtils.lerp(1, 0.1, focusProgress)
 				: 1;
-			const baseScale = isAnalogyResult ? 3.15 : isCompareWord ? 2.65 : isAnalogyInput ? 2.35 : isVisibleCandidate || isCompareNeighbor ? 1.85 : isActive ? 1.9 : 1;
+			const baseScale = isAnalogyResult ? 3.15 : isCompareWord || isPathWord ? 2.65 : isAnalogyInput ? 2.35 : isVisibleCandidate || isCompareNeighbor ? 1.85 : isActive ? 1.9 : 1;
 			const scale = baseScale * inactiveFocusScale * (isActive ? activeScaleBoost : 1);
 			colorScratch.copy(color).lerp(dimColor, isFocusMode && !isActive ? focusProgress : 0);
 			matrix.compose(position, rotation, new THREE.Vector3(scale, scale, scale));
@@ -386,6 +425,7 @@ function CartesianSpace({
 			...visibleCandidateIds,
 			...compareWordIds,
 			...compareNeighborIds,
+			...pathWordIds,
 			searchId,
 			selectedId,
 			hoveredId,
@@ -402,6 +442,7 @@ function CartesianSpace({
 		analogyRevealStep,
 		compareNeighborIds,
 		compareWordIds,
+		pathWordIds,
 		hoveredId,
 		searchId,
 		selectedId,
@@ -430,6 +471,12 @@ function CartesianSpace({
 			Array.isArray(from.reducedVector) && Array.isArray(to.reducedVector)
 		));
 	}, [compareLinks]);
+
+	const visiblePathLinks = useMemo(() => {
+		return pathLinks.filter(({ from, to }) => (
+			Array.isArray(from.reducedVector) && Array.isArray(to.reducedVector)
+		));
+	}, [pathLinks]);
 
 	return (
 		<>
@@ -468,17 +515,28 @@ function CartesianSpace({
 					delay={0}
 				/>
 			))}
+			{visiblePathLinks.map(({ from, to, label, variant = 'path' }, index) => (
+				<AnimatedBeam
+					key={`${presentationRunId}-path-${from.id}-${to.id}`}
+					from={from}
+					to={to}
+					color="#f472b6"
+					label={label || `${index + 1}`}
+					variant={variant}
+					delay={index * 0.24}
+				/>
+			))}
 			{activeLabels.map((embedding) => (
 				<Html
 					key={embedding.id}
 					position={[
 						embedding.reducedVector[0],
-						embedding.reducedVector[1] + (embedding.id === analogyResultId ? 22 : compareWordIdSet.has(embedding.id) ? 17 : analogyInputIdSet.has(embedding.id) ? 16 : visibleCandidateIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id) ? 11 : 8),
+						embedding.reducedVector[1] + (embedding.id === analogyResultId ? 13 : compareWordIdSet.has(embedding.id) || pathWordIdSet.has(embedding.id) ? 9 : analogyInputIdSet.has(embedding.id) ? 9 : visibleCandidateIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id) ? 7 : 5),
 						embedding.reducedVector[2],
 					]}
 					center
 					zIndexRange={[100, 0]}
-					className={`word-label ${analogyInputIdSet.has(embedding.id) ? 'analogy-input-label' : ''} ${embedding.id === analogyResultId ? 'analogy-result-label' : ''} ${visibleCandidateIdSet.has(embedding.id) ? 'analogy-candidate-label' : ''} ${compareWordIdSet.has(embedding.id) ? 'compare-word-label' : ''} ${compareNeighborIdSet.has(embedding.id) ? 'compare-neighbor-label' : ''}`}
+					className={`word-label ${analogyInputIdSet.has(embedding.id) ? 'analogy-input-label' : ''} ${embedding.id === analogyResultId ? 'analogy-result-label' : ''} ${visibleCandidateIdSet.has(embedding.id) ? 'analogy-candidate-label' : ''} ${compareWordIdSet.has(embedding.id) ? 'compare-word-label' : ''} ${compareNeighborIdSet.has(embedding.id) ? 'compare-neighbor-label' : ''} ${pathWordIdSet.has(embedding.id) ? 'path-word-label' : ''}`}
 				>
 					{embedding.word}
 				</Html>

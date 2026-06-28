@@ -10,6 +10,7 @@ import {
 	cosineSimilarity,
 	findExactWordMatch,
 	findNearestNeighbors,
+	findSemanticPath,
 	findWordMatch,
 	getVector,
 	projectVector,
@@ -22,6 +23,16 @@ const DEFAULT_ANALOGY_SUBTRACT = 'man';
 const DEFAULT_ANALOGY_RIGHT = 'woman';
 const DEFAULT_COMPARE_LEFT = 'king';
 const DEFAULT_COMPARE_RIGHT = 'queen';
+const DEFAULT_PATH_START = 'music';
+const DEFAULT_PATH_END = 'art';
+const PATH_PRESETS = [
+	{ id: 'creative', label: 'creative', start: 'music', end: 'art' },
+	{ id: 'royalty-path', label: 'royalty', start: 'king', end: 'queen' },
+	{ id: 'places', label: 'places', start: 'city', end: 'village' },
+	{ id: 'conflict', label: 'conflict', start: 'war', end: 'peace' },
+	{ id: 'technology', label: 'technology', start: 'computer', end: 'internet' },
+	{ id: 'campus', label: 'campus', start: 'school', end: 'university' },
+];
 const ANALOGY_PRESETS = [
 	{
 		id: 'royalty',
@@ -72,6 +83,12 @@ const PRESENTATION_PHASES = [
 	{ delay: 4250, step: 3 },
 	{ delay: 5900, step: 4 },
 	{ delay: 7200, step: 5 },
+];
+const PATH_REVEAL_PHASES = [
+	{ delay: 450, step: 2 },
+	{ delay: 1850, step: 3 },
+	{ delay: 3250, step: 4 },
+	{ delay: 4650, step: 5 },
 ];
 const TUTORIAL_SLIDES = [
 	{
@@ -186,8 +203,12 @@ function EmbeddingViewer() {
 	const [compareLeft, setCompareLeft] = useState(DEFAULT_COMPARE_LEFT);
 	const [compareRight, setCompareRight] = useState(DEFAULT_COMPARE_RIGHT);
 	const [calculatedCompare, setCalculatedCompare] = useState(null);
+	const [pathStart, setPathStart] = useState(DEFAULT_PATH_START);
+	const [pathEnd, setPathEnd] = useState(DEFAULT_PATH_END);
+	const [calculatedPath, setCalculatedPath] = useState(null);
 	const [presentationRunId, setPresentationRunId] = useState(0);
 	const [presentationStep, setPresentationStep] = useState(0);
+	const [pathRevealStep, setPathRevealStep] = useState(0);
 	const [visibleCandidateIds, setVisibleCandidateIds] = useState([]);
 	const [visibleCompareNeighborIds, setVisibleCompareNeighborIds] = useState([]);
 	const [isTutorialOpen, setIsTutorialOpen] = useState(true);
@@ -226,6 +247,14 @@ function EmbeddingViewer() {
 		return findExactWordMatch(embeddings, compareRight);
 	}, [compareRight, embeddings]);
 
+	const draftPathStartMatch = useMemo(() => {
+		return findExactWordMatch(embeddings, pathStart);
+	}, [embeddings, pathStart]);
+
+	const draftPathEndMatch = useMemo(() => {
+		return findExactWordMatch(embeddings, pathEnd);
+	}, [embeddings, pathEnd]);
+
 	const analogyPresets = useMemo(() => {
 		return ANALOGY_PRESETS.map((preset) => ({
 			...preset,
@@ -233,6 +262,16 @@ function EmbeddingViewer() {
 				findExactWordMatch(embeddings, preset.left)
 				&& findExactWordMatch(embeddings, preset.subtract)
 				&& findExactWordMatch(embeddings, preset.right)
+			),
+		}));
+	}, [embeddings]);
+
+	const pathPresets = useMemo(() => {
+		return PATH_PRESETS.map((preset) => ({
+			...preset,
+			isAvailable: Boolean(
+				findExactWordMatch(embeddings, preset.start)
+				&& findExactWordMatch(embeddings, preset.end)
 			),
 		}));
 	}, [embeddings]);
@@ -257,6 +296,14 @@ function EmbeddingViewer() {
 		return calculatedCompare ? findExactWordMatch(embeddings, calculatedCompare.right) : null;
 	}, [calculatedCompare, embeddings]);
 
+	const pathStartMatch = useMemo(() => {
+		return calculatedPath ? findExactWordMatch(embeddings, calculatedPath.start) : null;
+	}, [calculatedPath, embeddings]);
+
+	const pathEndMatch = useMemo(() => {
+		return calculatedPath ? findExactWordMatch(embeddings, calculatedPath.end) : null;
+	}, [calculatedPath, embeddings]);
+
 	const canCalculateAnalogy = Boolean(
 		draftAnalogyLeftMatch
 		&& draftAnalogySubtractMatch
@@ -273,6 +320,14 @@ function EmbeddingViewer() {
 		&& vectorNorms.length > 0,
 	);
 
+	const canFindPath = Boolean(
+		draftPathStartMatch
+		&& draftPathEndMatch
+		&& draftPathStartMatch.id !== draftPathEndMatch.id
+		&& vectorValues
+		&& vectorNorms.length > 0,
+	);
+
 	const hasPendingAnalogyChanges = calculatedAnalogy
 		&& (
 			calculatedAnalogy.left !== draftAnalogyLeftMatch?.word
@@ -284,6 +339,12 @@ function EmbeddingViewer() {
 		&& (
 			calculatedCompare.left !== draftCompareLeftMatch?.word
 			|| calculatedCompare.right !== draftCompareRightMatch?.word
+		);
+
+	const hasPendingPathChanges = calculatedPath
+		&& (
+			calculatedPath.start !== draftPathStartMatch?.word
+			|| calculatedPath.end !== draftPathEndMatch?.word
 		);
 
 	const analogyResults = useMemo(() => {
@@ -436,10 +497,62 @@ function EmbeddingViewer() {
 		}];
 	}, [compareLeftMatch, compareRightMatch]);
 
+	const semanticPath = useMemo(() => {
+		return findSemanticPath({
+			start: pathStartMatch,
+			end: pathEndMatch,
+			embeddings,
+			vectorValues,
+			vectorDimensions,
+			vectorNorms,
+			bridgeCount: 3,
+		});
+	}, [embeddings, pathEndMatch, pathStartMatch, vectorDimensions, vectorNorms, vectorValues]);
+
+	const pathWordIds = useMemo(() => {
+		return semanticPath.map((embedding) => embedding.id);
+	}, [semanticPath]);
+
+	const pathLinks = useMemo(() => {
+		return semanticPath.slice(0, -1).map((from, index) => ({
+			from,
+			to: semanticPath[index + 1],
+			label: `${index + 1}`,
+			variant: 'path',
+		}));
+	}, [semanticPath]);
+
+	const revealedPathWordIds = useMemo(() => {
+		return pathWordIds.slice(0, Math.min(pathRevealStep, pathWordIds.length));
+	}, [pathRevealStep, pathWordIds]);
+
+	const revealedPathLinks = useMemo(() => {
+		return pathLinks.slice(0, Math.max(0, Math.min(pathRevealStep - 1, pathLinks.length)));
+	}, [pathLinks, pathRevealStep]);
+
+	const revealedSemanticPath = useMemo(() => {
+		return semanticPath.slice(0, Math.min(pathRevealStep, semanticPath.length));
+	}, [pathRevealStep, semanticPath]);
+
 	const focusedEmbedding = selectedEmbedding || searchMatch || hoveredEmbedding;
 	const arithmeticExpression = `${analogyLeftMatch?.word || analogyLeft || '?'} - ${analogySubtractMatch?.word || analogySubtract || '?'} + ${analogyRightMatch?.word || analogyRight || '?'}`;
 	const draftArithmeticExpression = `${draftAnalogyLeftMatch?.word || analogyLeft || '?'} - ${draftAnalogySubtractMatch?.word || analogySubtract || '?'} + ${draftAnalogyRightMatch?.word || analogyRight || '?'}`;
 	const compareExpression = `${compareLeftMatch?.word || compareLeft || '?'} -> ${compareRightMatch?.word || compareRight || '?'}`;
+	const pathExpression = semanticPath.length > 0
+		? semanticPath.map((embedding) => embedding.word).join(' -> ')
+		: `${pathStartMatch?.word || pathStart || '?'} -> ${pathEndMatch?.word || pathEnd || '?'}`;
+	const revealedPathExpression = revealedSemanticPath.length > 0
+		? revealedSemanticPath.map((embedding) => embedding.word).join(' -> ')
+		: `${pathStartMatch?.word || pathStart || '?'} -> ${pathEndMatch?.word || pathEnd || '?'}`;
+	const isPathRevealDone = Boolean(calculatedPath && semanticPath.length > 1 && pathRevealStep >= semanticPath.length);
+	const activePathPresetId = useMemo(() => {
+		const normalizedStart = (draftPathStartMatch?.word || pathStart).trim().toLowerCase();
+		const normalizedEnd = (draftPathEndMatch?.word || pathEnd).trim().toLowerCase();
+
+		return PATH_PRESETS.find((preset) => (
+			preset.start === normalizedStart && preset.end === normalizedEnd
+		))?.id || null;
+	}, [draftPathEndMatch, draftPathStartMatch, pathEnd, pathStart]);
 	const activePresetId = useMemo(() => {
 		const normalizedExpression = [
 			draftAnalogyLeftMatch?.word || analogyLeft,
@@ -477,6 +590,16 @@ function EmbeddingViewer() {
 
 		return `${compareLeftMatch.word} and ${compareRightMatch.word} have a ${similarityPercent}% cosine similarity, but their closest visible neighborhoods separate quickly.`;
 	}, [compareLeftMatch, compareRightMatch, compareScore, compareSharedNeighbors]);
+	const pathExplanation = useMemo(() => {
+		if (semanticPath.length < 2) return '';
+
+		const bridges = semanticPath.slice(1, -1).map((embedding) => embedding.word);
+		if (bridges.length === 0) {
+			return `${semanticPath[0].word} connects directly to ${semanticPath[semanticPath.length - 1].word}.`;
+		}
+
+		return `${semanticPath[0].word} reaches ${semanticPath[semanticPath.length - 1].word} through ${bridges.join(', ')}, chosen from words nearest to points along the vector between them.`;
+	}, [semanticPath]);
 	const handleTutorialClose = useCallback(() => {
 		setIsTutorialOpen(false);
 	}, []);
@@ -547,7 +670,8 @@ function EmbeddingViewer() {
 		const maxCandidateId = Math.max(...visibleCandidateIds, -1);
 		const maxCompareWordId = Math.max(...compareWordIds, -1);
 		const maxCompareNeighborId = Math.max(...visibleCompareNeighborIds, -1);
-		const maxNeededId = Math.max(maxActiveId, maxCandidateId, maxCompareWordId, maxCompareNeighborId);
+		const maxPathWordId = Math.max(...pathWordIds, -1);
+		const maxNeededId = Math.max(maxActiveId, maxCandidateId, maxCompareWordId, maxCompareNeighborId, maxPathWordId);
 		if (maxNeededId < pointCount) return;
 
 		const nextCount = Math.min(
@@ -559,6 +683,7 @@ function EmbeddingViewer() {
 		analogyIds,
 		compareWordIds,
 		embeddings.length,
+		pathWordIds,
 		pointCount,
 		visibleCandidateIds,
 		visibleCompareNeighborIds,
@@ -575,6 +700,18 @@ function EmbeddingViewer() {
 			timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
 		};
 	}, [analogyResult, presentationRunId]);
+
+	useEffect(() => {
+		if (!calculatedPath || semanticPath.length < 2) return undefined;
+
+		const timeoutIds = PATH_REVEAL_PHASES.map(({ delay, step }) => (
+			window.setTimeout(() => setPathRevealStep(Math.min(step, semanticPath.length)), delay)
+		));
+
+		return () => {
+			timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+		};
+	}, [calculatedPath, presentationRunId, semanticPath.length]);
 
 	useEffect(() => {
 		if (!isTutorialOpen) return undefined;
@@ -596,6 +733,7 @@ function EmbeddingViewer() {
 	const presentAnalogy = (leftMatch, subtractMatch, rightMatch) => {
 		setActiveMode('arithmetic');
 		setCalculatedCompare(null);
+		setCalculatedPath(null);
 		setVisibleCompareNeighborIds([]);
 		setCalculatedAnalogy({
 			left: leftMatch.word,
@@ -604,6 +742,7 @@ function EmbeddingViewer() {
 		});
 		setVisibleCandidateIds([]);
 		setPresentationStep(0);
+		setPathRevealStep(0);
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
@@ -630,8 +769,10 @@ function EmbeddingViewer() {
 		}
 
 		setCalculatedAnalogy(null);
+		setCalculatedPath(null);
 		setVisibleCandidateIds([]);
 		setPresentationStep(0);
+		setPathRevealStep(0);
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 	};
 
@@ -655,6 +796,7 @@ function EmbeddingViewer() {
 		setVisibleCandidateIds([]);
 		setVisibleCompareNeighborIds([]);
 		setPresentationStep(0);
+		setPathRevealStep(0);
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
@@ -668,6 +810,54 @@ function EmbeddingViewer() {
 		));
 	};
 
+	const handleFindPath = () => {
+		if (!canFindPath) return;
+
+		setActiveMode('path');
+		setCalculatedPath({
+			start: draftPathStartMatch.word,
+			end: draftPathEndMatch.word,
+		});
+		setCalculatedAnalogy(null);
+		setCalculatedCompare(null);
+		setVisibleCandidateIds([]);
+		setVisibleCompareNeighborIds([]);
+		setPresentationStep(0);
+		setPathRevealStep(1);
+		setPresentationRunId((currentRunId) => currentRunId + 1);
+		setHoveredEmbedding(null);
+		setSelectedEmbedding(null);
+	};
+
+	const handlePathPresetSelect = (preset) => {
+		setPathStart(preset.start);
+		setPathEnd(preset.end);
+		setActiveMode('path');
+
+		const presetStartMatch = findExactWordMatch(embeddings, preset.start);
+		const presetEndMatch = findExactWordMatch(embeddings, preset.end);
+
+		if (presetStartMatch && presetEndMatch) {
+			setCalculatedPath({
+				start: presetStartMatch.word,
+				end: presetEndMatch.word,
+			});
+			setCalculatedAnalogy(null);
+			setCalculatedCompare(null);
+			setVisibleCandidateIds([]);
+			setVisibleCompareNeighborIds([]);
+			setPresentationStep(0);
+			setPathRevealStep(1);
+			setPresentationRunId((currentRunId) => currentRunId + 1);
+			setHoveredEmbedding(null);
+			setSelectedEmbedding(null);
+			return;
+		}
+
+		setCalculatedPath(null);
+		setPathRevealStep(0);
+	};
+
 	const handleClear = () => {
 		setAnalogyLeft('');
 		setAnalogySubtract('');
@@ -676,9 +866,13 @@ function EmbeddingViewer() {
 		setCompareLeft('');
 		setCompareRight('');
 		setCalculatedCompare(null);
+		setPathStart('');
+		setPathEnd('');
+		setCalculatedPath(null);
 		setVisibleCandidateIds([]);
 		setVisibleCompareNeighborIds([]);
 		setPresentationStep(0);
+		setPathRevealStep(0);
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setSearchTerm('');
 		setHoveredEmbedding(null);
@@ -718,6 +912,8 @@ function EmbeddingViewer() {
 					compareWordIds={activeMode === 'compare' ? compareWordIds : []}
 					compareNeighborIds={activeMode === 'compare' ? visibleCompareNeighborIds : []}
 					compareLinks={activeMode === 'compare' ? compareLinks : []}
+					pathWordIds={activeMode === 'path' ? revealedPathWordIds : []}
+					pathLinks={activeMode === 'path' ? revealedPathLinks : []}
 					analogyRevealStep={presentationStep}
 					analogyPresentationDone={activeMode === 'arithmetic' && isAnalogyPresentationDone}
 					presentationRunId={presentationRunId}
@@ -737,6 +933,13 @@ function EmbeddingViewer() {
 				<div className="analogy-stage-readout compare-stage-readout" aria-live="polite">
 					<span>{compareExpression}</span>
 					<strong>{(Math.max(0, compareScore) * 100).toFixed(1)}%</strong>
+				</div>
+			)}
+
+			{activeMode === 'path' && calculatedPath && semanticPath.length > 1 && (
+				<div className="analogy-stage-readout path-stage-readout" aria-live="polite">
+					<span>{`${semanticPath[0].word} -> ${semanticPath[semanticPath.length - 1].word}`}</span>
+					<strong>{semanticPath.length - 1} steps</strong>
 				</div>
 			)}
 
@@ -857,6 +1060,15 @@ function EmbeddingViewer() {
 						>
 							Compare
 						</button>
+						<button
+							className={activeMode === 'path' ? 'is-active' : ''}
+							type="button"
+							role="tab"
+							aria-selected={activeMode === 'path'}
+							onClick={() => setActiveMode('path')}
+						>
+							Path
+						</button>
 					</div>
 
 					{activeMode === 'arithmetic' ? (
@@ -974,7 +1186,7 @@ function EmbeddingViewer() {
 								</ol>
 							)}
 						</>
-					) : (
+					) : activeMode === 'compare' ? (
 						<>
 							<span>Compare two words</span>
 							<div className="compare-controls">
@@ -1097,6 +1309,96 @@ function EmbeddingViewer() {
 										</div>
 									</div>
 								</div>
+							)}
+						</>
+					) : (
+						<>
+							<span>Path explorer</span>
+							<div className="compare-controls path-controls">
+								<input
+									type="search"
+									value={pathStart}
+									onChange={(event) => setPathStart(event.target.value)}
+									placeholder="music"
+									autoComplete="off"
+									aria-label="Path start word"
+								/>
+								<b>{'->'}</b>
+								<input
+									type="search"
+									value={pathEnd}
+									onChange={(event) => setPathEnd(event.target.value)}
+									placeholder="art"
+									autoComplete="off"
+									aria-label="Path end word"
+								/>
+							</div>
+							<div className="analogy-validation compare-validation" aria-live="polite">
+								<small className={draftPathStartMatch ? 'is-valid' : 'is-missing'}>{draftPathStartMatch ? draftPathStartMatch.word : 'Start word not found'}</small>
+								<small className={draftPathEndMatch ? 'is-valid' : 'is-missing'}>{draftPathEndMatch ? draftPathEndMatch.word : 'End word not found'}</small>
+							</div>
+							<div className="preset-drawer path-preset-drawer">
+								<span>Path presets</span>
+								<div className="preset-grid">
+									{pathPresets.map((preset) => (
+										<button
+											key={preset.id}
+											className={activePathPresetId === preset.id ? 'is-active' : ''}
+											type="button"
+											onClick={() => handlePathPresetSelect(preset)}
+											disabled={!preset.isAvailable}
+											title={`${preset.start} -> ${preset.end}`}
+										>
+											<strong>{preset.label}</strong>
+											<small>
+												{preset.start}
+												{' -> '}
+												{preset.end}
+											</small>
+										</button>
+									))}
+								</div>
+							</div>
+							<button
+								className="calculate-button path-button"
+								type="button"
+								onClick={handleFindPath}
+								disabled={!canFindPath}
+							>
+								{hasPendingPathChanges ? 'Refind path' : 'Find path'}
+							</button>
+							<button
+								className="clear-button"
+								type="button"
+								onClick={handleClear}
+							>
+								Clear
+							</button>
+							<div className="analogy-result path-result">
+								<small>{calculatedPath ? revealedPathExpression : pathExpression}</small>
+								<strong>{calculatedPath && semanticPath.length > 1 ? isPathRevealDone ? `${semanticPath.length - 1} semantic steps` : 'Drawing path...' : 'Ready when you find a path'}</strong>
+								{hasPendingPathChanges && (
+									<em>Inputs changed. Find path to update the scene.</em>
+								)}
+							</div>
+							{calculatedPath && pathExplanation && (
+								<div className="analogy-explanation path-explanation">
+									<span>Path readout</span>
+									<p>{pathExplanation}</p>
+								</div>
+							)}
+							{calculatedPath && revealedSemanticPath.length > 0 && (
+								<ol className="path-steps">
+									{revealedSemanticPath.map((embedding, index) => (
+										<li key={embedding.id}>
+											<span>{index + 1}</span>
+											<strong>{embedding.word}</strong>
+											{Number.isFinite(embedding.score) && (
+												<small>{embedding.score.toFixed(3)}</small>
+											)}
+										</li>
+									))}
+								</ol>
 							)}
 						</>
 					)}

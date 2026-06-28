@@ -654,6 +654,16 @@ input {
   color: #fde68a;
 }
 
+.path-stage-readout {
+  border-color: rgba(244, 114, 182, 0.36);
+  color: #fce7f3;
+  background: rgba(48, 18, 35, 0.82);
+}
+
+.path-stage-readout span {
+  color: #fbcfe8;
+}
+
 .focus-readout strong {
   color: #ffffff;
   font-size: 1.05rem;
@@ -672,7 +682,7 @@ input {
 
 .mode-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   padding: 4px;
   border: 1px solid rgba(177, 199, 218, 0.16);
@@ -831,6 +841,13 @@ input {
   box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.08);
 }
 
+.path-preset-drawer .preset-grid button.is-active {
+  border-color: rgba(244, 114, 182, 0.52);
+  color: #fdf2f8;
+  background: rgba(131, 24, 67, 0.36);
+  box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.08);
+}
+
 .preset-grid button:disabled {
   cursor: not-allowed;
   opacity: 0.42;
@@ -948,6 +965,25 @@ input {
   box-shadow: 0 12px 30px rgba(251, 191, 36, 0.16);
 }
 
+.path-button {
+  border-color: rgba(244, 114, 182, 0.44);
+  color: #3b1027;
+  background: #f9a8d4;
+}
+
+.path-button:hover:not(:disabled) {
+  box-shadow: 0 12px 30px rgba(244, 114, 182, 0.16);
+}
+
+.path-result {
+  background: rgba(48, 18, 35, 0.42);
+}
+
+.path-result small,
+.path-explanation span {
+  color: #fbcfe8;
+}
+
 .analogy-explanation {
   display: grid;
   gap: 7px;
@@ -973,6 +1009,57 @@ input {
   background:
     linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(118, 228, 247, 0.08)),
     rgba(7, 13, 18, 0.38);
+}
+
+.path-explanation {
+  border-color: rgba(244, 114, 182, 0.18);
+  background:
+    linear-gradient(135deg, rgba(244, 114, 182, 0.1), rgba(118, 228, 247, 0.08)),
+    rgba(7, 13, 18, 0.38);
+}
+
+.path-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.path-steps li {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: #fce7f3;
+  background: rgba(244, 114, 182, 0.09);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.path-steps span {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  color: #3b1027;
+  background: #f9a8d4;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.path-steps strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.path-steps small {
+  color: #fbcfe8;
 }
 
 .compare-neighborhoods {
@@ -1195,6 +1282,17 @@ input {
   box-shadow:
     0 0 0 3px rgba(118, 228, 247, 0.12),
     0 14px 42px rgba(0, 0, 0, 0.42);
+}
+
+.path-word-label {
+  border-color: rgba(244, 114, 182, 0.86);
+  color: #fff7fb;
+  background: rgba(131, 24, 67, 0.96);
+  box-shadow:
+    0 0 0 3px rgba(244, 114, 182, 0.14),
+    0 18px 54px rgba(0, 0, 0, 0.48);
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .arrow-label {
