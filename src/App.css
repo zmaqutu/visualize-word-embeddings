@@ -58,6 +58,7 @@ input {
 .search-control span,
 .range-control span,
 .focus-readout span,
+.share-view-card span,
 .analogy-card > span,
 .preset-drawer > span,
 .analogy-explanation span,
@@ -128,6 +129,55 @@ input {
   border: 1px solid rgba(118, 228, 247, 0.18);
   border-radius: 6px;
   background: rgba(118, 228, 247, 0.08);
+}
+
+.share-view-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(177, 199, 218, 0.16);
+  border-radius: 6px;
+  background: rgba(7, 13, 18, 0.42);
+}
+
+.share-view-card div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.share-view-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #dbe7f2;
+  font-size: 0.86rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-view-card button {
+  min-width: 88px;
+  height: 36px;
+  border: 1px solid rgba(118, 228, 247, 0.28);
+  border-radius: 6px;
+  color: #dff7ff;
+  background: rgba(14, 116, 144, 0.22);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.share-view-card button:hover {
+  border-color: rgba(118, 228, 247, 0.5);
+  background: rgba(14, 116, 144, 0.34);
+  transform: translateY(-1px);
 }
 
 .semantic-rail {
@@ -2065,6 +2115,14 @@ input {
   .word-action-grid,
   .word-inspector-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .share-view-card {
+    grid-template-columns: 1fr;
+  }
+
+  .share-view-card button {
+    width: 100%;
   }
 
   .tutorial-backdrop {

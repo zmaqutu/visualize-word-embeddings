@@ -394,6 +394,8 @@ function EmbeddingViewer() {
 	const [visibleCompareNeighborIds, setVisibleCompareNeighborIds] = useState([]);
 	const [isTutorialOpen, setIsTutorialOpen] = useState(true);
 	const [tutorialSlide, setTutorialSlide] = useState(0);
+	const [shareStatus, setShareStatus] = useState('');
+	const hasAppliedSharedView = useRef(false);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
 	const maxPointCount = Math.max(embeddings.length, DEFAULT_POINT_COUNT);
@@ -736,6 +738,60 @@ function EmbeddingViewer() {
 			limit: 6,
 		});
 	}, [embeddings, inspectorEmbedding, vectorDimensions, vectorNorms, vectorValues]);
+	const shareUrl = useMemo(() => {
+		if (typeof window === 'undefined') return '';
+
+		const params = new URLSearchParams();
+		params.set('mode', activeMode);
+		params.set('count', String(visibleCount || DEFAULT_POINT_COUNT));
+
+		if (searchTerm.trim()) {
+			params.set('q', searchTerm.trim());
+		} else if (selectedEmbedding?.word) {
+			params.set('q', selectedEmbedding.word);
+		}
+
+		if (activeMode === 'arithmetic') {
+			params.set('a', calculatedAnalogy?.left || draftAnalogyLeftMatch?.word || analogyLeft);
+			params.set('sub', calculatedAnalogy?.subtract || draftAnalogySubtractMatch?.word || analogySubtract);
+			params.set('b', calculatedAnalogy?.right || draftAnalogyRightMatch?.word || analogyRight);
+			if (calculatedAnalogy) params.set('calc', '1');
+		} else if (activeMode === 'compare') {
+			params.set('left', calculatedCompare?.left || draftCompareLeftMatch?.word || compareLeft);
+			params.set('right', calculatedCompare?.right || draftCompareRightMatch?.word || compareRight);
+			if (calculatedCompare) params.set('calc', '1');
+		} else if (activeMode === 'path') {
+			params.set('start', calculatedPath?.start || draftPathStartMatch?.word || pathStart);
+			params.set('end', calculatedPath?.end || draftPathEndMatch?.word || pathEnd);
+			if (calculatedPath) params.set('calc', '1');
+		}
+
+		const url = new URL(window.location.href);
+		url.search = params.toString();
+		return url.toString();
+	}, [
+		activeMode,
+		analogyLeft,
+		analogyRight,
+		analogySubtract,
+		calculatedAnalogy,
+		calculatedCompare,
+		calculatedPath,
+		compareLeft,
+		compareRight,
+		draftAnalogyLeftMatch,
+		draftAnalogyRightMatch,
+		draftAnalogySubtractMatch,
+		draftCompareLeftMatch,
+		draftCompareRightMatch,
+		draftPathEndMatch,
+		draftPathStartMatch,
+		pathEnd,
+		pathStart,
+		searchTerm,
+		selectedEmbedding,
+		visibleCount,
+	]);
 	const isPathRevealDone = Boolean(calculatedPath && semanticPath.length > 1 && pathRevealStep >= semanticPath.length);
 	const arithmeticTimelineSteps = useMemo(() => {
 		if (!analogyResult || !analogyLeftMatch || !analogySubtractMatch || !analogyRightMatch) return [];
@@ -1007,6 +1063,83 @@ function EmbeddingViewer() {
 			setPointCount(Math.min(DEFAULT_POINT_COUNT, embeddings.length));
 		}
 	}, [embeddings.length]);
+
+	useEffect(() => {
+		if (hasAppliedSharedView.current || embeddings.length === 0) return;
+		hasAppliedSharedView.current = true;
+
+		const params = new URLSearchParams(window.location.search);
+		if (params.size === 0) return;
+		setIsTutorialOpen(false);
+
+		const sharedMode = params.get('mode');
+		const sharedCount = Number(params.get('count'));
+		const shouldCalculate = params.get('calc') === '1';
+
+		if (Number.isFinite(sharedCount) && sharedCount > 0) {
+			setPointCount(Math.min(embeddings.length, Math.max(500, sharedCount)));
+		}
+
+		const sharedSearch = params.get('q') || '';
+		if (sharedSearch) {
+			setSearchTerm(sharedSearch);
+		}
+
+		if (sharedMode === 'compare') {
+			const left = params.get('left') || DEFAULT_COMPARE_LEFT;
+			const right = params.get('right') || DEFAULT_COMPARE_RIGHT;
+			setActiveMode('compare');
+			setCompareLeft(left);
+			setCompareRight(right);
+
+			const leftMatch = findExactWordMatch(embeddings, left);
+			const rightMatch = findExactWordMatch(embeddings, right);
+			if (shouldCalculate && leftMatch && rightMatch && leftMatch.id !== rightMatch.id) {
+				setCalculatedCompare({ left: leftMatch.word, right: rightMatch.word });
+			}
+			return;
+		}
+
+		if (sharedMode === 'path') {
+			const start = params.get('start') || DEFAULT_PATH_START;
+			const end = params.get('end') || DEFAULT_PATH_END;
+			setActiveMode('path');
+			setPathStart(start);
+			setPathEnd(end);
+
+			const startMatch = findExactWordMatch(embeddings, start);
+			const endMatch = findExactWordMatch(embeddings, end);
+			if (shouldCalculate && startMatch && endMatch && startMatch.id !== endMatch.id) {
+				setCalculatedPath({ start: startMatch.word, end: endMatch.word });
+				setPathRevealStep(1);
+				setPresentationRunId((currentRunId) => currentRunId + 1);
+			}
+			return;
+		}
+
+		if (sharedMode === 'arithmetic' || params.has('a') || params.has('sub') || params.has('b')) {
+			const left = params.get('a') || DEFAULT_ANALOGY_LEFT;
+			const subtract = params.get('sub') || DEFAULT_ANALOGY_SUBTRACT;
+			const right = params.get('b') || DEFAULT_ANALOGY_RIGHT;
+			setActiveMode('arithmetic');
+			setAnalogyLeft(left);
+			setAnalogySubtract(subtract);
+			setAnalogyRight(right);
+
+			const leftMatch = findExactWordMatch(embeddings, left);
+			const subtractMatch = findExactWordMatch(embeddings, subtract);
+			const rightMatch = findExactWordMatch(embeddings, right);
+			if (shouldCalculate && leftMatch && subtractMatch && rightMatch) {
+				setCalculatedAnalogy({
+					left: leftMatch.word,
+					subtract: subtractMatch.word,
+					right: rightMatch.word,
+				});
+				setPresentationStep(0);
+				setPresentationRunId((currentRunId) => currentRunId + 1);
+			}
+		}
+	}, [embeddings]);
 
 	useEffect(() => {
 		if (!searchMatch || searchMatch.id < pointCount) return;
@@ -1320,6 +1453,37 @@ function EmbeddingViewer() {
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
 		setPointCount(Math.min(DEFAULT_POINT_COUNT, embeddings.length || DEFAULT_POINT_COUNT));
+		setShareStatus('');
+		if (typeof window !== 'undefined') {
+			window.history.replaceState(null, '', window.location.pathname);
+		}
+	};
+
+	const handleCopyShareLink = () => {
+		if (!shareUrl) return;
+
+		setShareStatus('Copied');
+		try {
+			if (navigator.clipboard?.writeText) {
+				window.setTimeout(() => {
+					navigator.clipboard.writeText(shareUrl).catch(() => setShareStatus('Copy failed'));
+				}, 0);
+			} else {
+				const textarea = document.createElement('textarea');
+				textarea.value = shareUrl;
+				textarea.setAttribute('readonly', '');
+				textarea.style.position = 'fixed';
+				textarea.style.opacity = '0';
+				document.body.appendChild(textarea);
+				textarea.select();
+				document.execCommand('copy');
+				document.body.removeChild(textarea);
+			}
+		} catch {
+			setShareStatus('Copy failed');
+		}
+
+		window.setTimeout(() => setShareStatus(''), 1800);
 	};
 
 	return (
@@ -2004,6 +2168,16 @@ function EmbeddingViewer() {
 					{searchTerm && !searchMatch && (
 						<small>No visible match yet</small>
 					)}
+				</div>
+
+				<div className="share-view-card">
+					<div>
+						<span>Share view</span>
+						<strong>{shareStatus || 'Copy a link to this setup'}</strong>
+					</div>
+					<button type="button" onClick={handleCopyShareLink}>
+						Copy link
+					</button>
 				</div>
 			</section>
 

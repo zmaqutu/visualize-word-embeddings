@@ -15,6 +15,7 @@ const COMPARE_WORD_COLOR = new THREE.Color('#fbbf24');
 const COMPARE_NEIGHBOR_COLOR = new THREE.Color('#76e4f7');
 const PATH_WORD_COLOR = new THREE.Color('#f472b6');
 const DIM_COLOR = new THREE.Color('#536170');
+const CAMERA_FOCUS_DURATION = 2.4;
 
 const getLabelLift = ({
 	isAnalogyResult,
@@ -211,6 +212,7 @@ function CartesianSpace({
 	onSelect,
 }) {
 	const { camera } = useThree();
+	const controlsRef = useRef();
 	const wordEmbeddingsMeshRef = useRef();
 	const raycasterRef = useRef(new THREE.Raycaster());
 	const pointer = useRef(new THREE.Vector2());
@@ -253,6 +255,10 @@ function CartesianSpace({
 	const isAnalogyFocusMode = Number.isInteger(analogyResultId);
 	const isFocusMode = isAnalogyFocusMode || isCompareFocusMode || isPathFocusMode;
 	const focusProgressRef = useRef(0);
+	const cameraFocusSignatureRef = useRef('');
+	const cameraFocusStartedAtRef = useRef(0);
+	const cameraFocusStartPositionRef = useRef(new THREE.Vector3());
+	const cameraFocusStartTargetRef = useRef(new THREE.Vector3());
 
 	const renderedEmbeddings = useMemo(() => {
 		if (isCompareFocusMode) {
@@ -490,6 +496,120 @@ function CartesianSpace({
 		));
 	}, [pathLinks]);
 
+	const cameraFocus = useMemo(() => {
+		const pointsByKey = new Map();
+
+		activeLabels.forEach((embedding) => {
+			const isHoverOnly = embedding.id === hoveredId
+				&& embedding.id !== selectedId
+				&& embedding.id !== searchId
+				&& !analogyInputIdSet.has(embedding.id)
+				&& embedding.id !== analogyResultId
+				&& !visibleCandidateIdSet.has(embedding.id)
+				&& !compareWordIdSet.has(embedding.id)
+				&& !compareNeighborIdSet.has(embedding.id)
+				&& !pathWordIdSet.has(embedding.id);
+
+			if (isHoverOnly) return;
+
+			if (Array.isArray(embedding.reducedVector)) {
+				pointsByKey.set(`word-${embedding.id}`, embedding.reducedVector);
+			}
+		});
+
+		[
+			...visibleAnalogyLinks,
+			...visibleCompareLinks,
+			...visiblePathLinks,
+		].forEach(({ from, to }) => {
+			if (Array.isArray(from.reducedVector)) pointsByKey.set(`from-${from.id}`, from.reducedVector);
+			if (Array.isArray(to.reducedVector)) pointsByKey.set(`to-${to.id}`, to.reducedVector);
+		});
+
+		const points = Array.from(pointsByKey.values());
+		if (points.length === 0) return null;
+
+		const center = new THREE.Vector3();
+		points.forEach((point) => center.add(new THREE.Vector3(...point)));
+		center.divideScalar(points.length);
+
+		const radius = points.reduce((maxRadius, point) => (
+			Math.max(maxRadius, center.distanceTo(new THREE.Vector3(...point)))
+		), 18);
+		const distance = THREE.MathUtils.clamp(radius * 2.15 + 92, 110, 330);
+		const offsetDirection = new THREE.Vector3(0.86, 0.68, 0.58).normalize();
+		const position = center.clone().add(offsetDirection.clone().multiplyScalar(distance));
+		const firstPoint = new THREE.Vector3(...points[0]);
+		const lastPoint = new THREE.Vector3(...points[points.length - 1]);
+		const lateralDirection = lastPoint.clone().sub(firstPoint).cross(new THREE.Vector3(0, 1, 0));
+		if (lateralDirection.lengthSq() < 0.001) {
+			lateralDirection.set(-0.58, 0, 0.86);
+		}
+		lateralDirection.normalize();
+		const controlPosition = center.clone()
+			.add(offsetDirection.clone().multiplyScalar(distance * 1.3))
+			.add(lateralDirection.multiplyScalar(Math.max(32, radius * 0.82)))
+			.add(new THREE.Vector3(0, Math.max(26, distance * 0.22), 0));
+		const signature = points
+			.map((point) => point.map((value) => value.toFixed(1)).join(','))
+			.sort()
+			.join('|');
+
+		return {
+			center,
+			controlPosition,
+			position,
+			signature,
+		};
+	}, [
+		activeLabels,
+		analogyInputIdSet,
+		analogyResultId,
+		compareNeighborIdSet,
+		compareWordIdSet,
+		hoveredId,
+		pathWordIdSet,
+		searchId,
+		selectedId,
+		visibleAnalogyLinks,
+		visibleCandidateIdSet,
+		visibleCompareLinks,
+		visiblePathLinks,
+	]);
+
+	useEffect(() => {
+		if (!cameraFocus || cameraFocus.signature === cameraFocusSignatureRef.current) return;
+
+		cameraFocusSignatureRef.current = cameraFocus.signature;
+		cameraFocusStartedAtRef.current = performance.now();
+		cameraFocusStartPositionRef.current.copy(camera.position);
+		if (controlsRef.current) {
+			cameraFocusStartTargetRef.current.copy(controlsRef.current.target);
+		} else {
+			cameraFocusStartTargetRef.current.set(0, 0, 0);
+		}
+	}, [camera, cameraFocus]);
+
+	useFrame(() => {
+		if (!cameraFocus || !controlsRef.current) return;
+
+		const elapsed = (performance.now() - cameraFocusStartedAtRef.current) / 1000;
+		if (elapsed >= CAMERA_FOCUS_DURATION) return;
+
+		const progress = THREE.MathUtils.clamp(elapsed / CAMERA_FOCUS_DURATION, 0, 1);
+		const easedProgress = progress < 0.72
+			? THREE.MathUtils.smootherstep(progress / 0.72, 0, 1) * 0.84
+			: 0.84 + THREE.MathUtils.smootherstep((progress - 0.72) / 0.28, 0, 1) * 0.16;
+		const startToControl = cameraFocusStartPositionRef.current.clone().lerp(cameraFocus.controlPosition, easedProgress);
+		const controlToEnd = cameraFocus.controlPosition.clone().lerp(cameraFocus.position, easedProgress);
+		const cinematicPosition = startToControl.lerp(controlToEnd, easedProgress);
+		const cinematicTarget = cameraFocusStartTargetRef.current.clone().lerp(cameraFocus.center, easedProgress);
+
+		camera.position.copy(cinematicPosition);
+		controlsRef.current.target.copy(cinematicTarget);
+		controlsRef.current.update();
+	});
+
 	return (
 		<>
 			<color attach="background" args={['#101820']} />
@@ -561,6 +681,7 @@ function CartesianSpace({
 			<axesHelper args={[155]} />
 			<gridHelper args={[320, 32, '#43515f', '#24313d']} />
 			<OrbitControls
+				ref={controlsRef}
 				enableDamping
 				dampingFactor={0.08}
 				makeDefault
