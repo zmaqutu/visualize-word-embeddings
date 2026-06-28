@@ -2,8 +2,8 @@ import CartesianSpace from '../components/CartesianSpace';
 import LoadingScreen from '../components/LoadingScreen';
 import useWordEmbeddings from '../hooks/useWordEmbeddings';
 import { Canvas } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useSpring, a } from '@react-spring/web';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSpring, a, to } from '@react-spring/web';
 import {
 	buildProjectionModel,
 	buildVectorNorms,
@@ -25,6 +25,101 @@ const PRESENTATION_PHASES = [
 	{ delay: 5900, step: 4 },
 	{ delay: 7200, step: 5 },
 ];
+const TUTORIAL_SLIDES = [
+	{
+		title: 'Change visible words',
+		copy: 'Use the range control to bring more of the semantic cloud into view when you need a broader neighborhood.',
+		preview: 'visible',
+	},
+	{
+		title: 'Hover and select',
+		copy: 'Move over a point to preview its label, then click to keep a word pinned while you inspect nearby terms.',
+		preview: 'hover',
+	},
+	{
+		title: 'Run vector arithmetic',
+		copy: 'Enter exact words, press Calculate, and watch the trail build the analogy before revealing the nearest result.',
+		preview: 'arithmetic',
+	},
+	{
+		title: 'Find a word',
+		copy: 'Search jumps straight to a word and expands the visible set when the match sits deeper in the vocabulary.',
+		preview: 'search',
+	},
+];
+
+function TutorialPreview({ type }) {
+	if (type === 'visible') {
+		return (
+			<div className="tutorial-preview tutorial-preview-visible" aria-label="Visible words control screenshot">
+				<div className="preview-panel-line">
+					<span>Visible words</span>
+					<strong>4,500</strong>
+				</div>
+				<div className="preview-slider">
+					<span />
+				</div>
+				<div className="preview-cloud">
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+					<i />
+				</div>
+			</div>
+		);
+	}
+
+	if (type === 'hover') {
+		return (
+			<div className="tutorial-preview tutorial-preview-hover" aria-label="Hover and select word screenshot">
+				<div className="preview-cloud">
+					<i />
+					<i className="is-selected" />
+					<i />
+					<i className="is-hovered" />
+					<i />
+				</div>
+				<div className="preview-floating-label">science</div>
+				<div className="preview-focus-chip">Focus: science</div>
+			</div>
+		);
+	}
+
+	if (type === 'arithmetic') {
+		return (
+			<div className="tutorial-preview tutorial-preview-arithmetic" aria-label="Vector arithmetic screenshot">
+				<div className="preview-equation">
+					<span>king</span>
+					<b>-</b>
+					<span>man</span>
+					<b>+</b>
+					<span>woman</span>
+				</div>
+				<div className="preview-trail">
+					<i />
+					<i />
+					<i />
+				</div>
+				<div className="preview-result">queen</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="tutorial-preview tutorial-preview-search" aria-label="Find a word screenshot">
+			<div className="preview-search-box">music</div>
+			<div className="preview-search-map">
+				<i />
+				<i />
+				<i className="is-found" />
+				<i />
+			</div>
+			<div className="preview-floating-label">music</div>
+		</div>
+	);
+}
 
 function EmbeddingViewer() {
 	const { embeddings, loading, error, status, vectorValues, vectorDimensions } = useWordEmbeddings();
@@ -42,6 +137,8 @@ function EmbeddingViewer() {
 	const [presentationRunId, setPresentationRunId] = useState(0);
 	const [presentationStep, setPresentationStep] = useState(0);
 	const [visibleCandidateIds, setVisibleCandidateIds] = useState([]);
+	const [isTutorialOpen, setIsTutorialOpen] = useState(true);
+	const [tutorialSlide, setTutorialSlide] = useState(0);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
 	const maxPointCount = Math.max(embeddings.length, DEFAULT_POINT_COUNT);
@@ -184,11 +281,43 @@ function EmbeddingViewer() {
 	const focusedEmbedding = selectedEmbedding || searchMatch || hoveredEmbedding;
 	const arithmeticExpression = `${analogyLeftMatch?.word || analogyLeft || '?'} - ${analogySubtractMatch?.word || analogySubtract || '?'} + ${analogyRightMatch?.word || analogyRight || '?'}`;
 	const draftArithmeticExpression = `${draftAnalogyLeftMatch?.word || analogyLeft || '?'} - ${draftAnalogySubtractMatch?.word || analogySubtract || '?'} + ${draftAnalogyRightMatch?.word || analogyRight || '?'}`;
+	const handleTutorialClose = useCallback(() => {
+		setIsTutorialOpen(false);
+	}, []);
+	const handleTutorialOpen = useCallback(() => {
+		setIsTutorialOpen(true);
+	}, []);
+	const handleTutorialLauncherKeyDown = useCallback((event) => {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			handleTutorialOpen();
+		}
+	}, [handleTutorialOpen]);
+	const handlePreviousTutorialSlide = () => {
+		setTutorialSlide((currentSlide) => (
+			currentSlide === 0 ? TUTORIAL_SLIDES.length - 1 : currentSlide - 1
+		));
+	};
+	const handleNextTutorialSlide = () => {
+		setTutorialSlide((currentSlide) => (
+			currentSlide === TUTORIAL_SLIDES.length - 1 ? 0 : currentSlide + 1
+		));
+	};
+	const activeTutorialSlide = TUTORIAL_SLIDES[tutorialSlide];
 
 	const loaderProps = useSpring({
 		opacity: loading ? 1 : 0,
 		transform: loading ? 'translateY(0%)' : 'translateY(-100%)',
 		config: { tension: 170, friction: 26 },
+	});
+	const tutorialCardProps = useSpring({
+		x: isTutorialOpen ? 0 : 43,
+		y: isTutorialOpen ? 0 : -42,
+		scale: 1,
+		rotate: isTutorialOpen ? 0 : 8,
+		config: isTutorialOpen
+			? { tension: 190, friction: 22 }
+			: { tension: 210, friction: 26, clamp: true },
 	});
 
 	useEffect(() => {
@@ -241,6 +370,19 @@ function EmbeddingViewer() {
 			timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
 		};
 	}, [analogyResult, presentationRunId]);
+
+	useEffect(() => {
+		if (!isTutorialOpen) return undefined;
+
+		const handleKeyDown = (event) => {
+			if (event.key === 'Escape') {
+				handleTutorialClose();
+			}
+		};
+
+		window.addEventListener('keydown', handleKeyDown);
+		return () => window.removeEventListener('keydown', handleKeyDown);
+	}, [handleTutorialClose, isTutorialOpen]);
 
 	const handlePointCountChange = (event) => {
 		setPointCount(Number(event.target.value));
@@ -325,6 +467,94 @@ function EmbeddingViewer() {
 					<span>{arithmeticExpression}</span>
 					<strong>{analogyResult.word}</strong>
 				</div>
+			)}
+
+			{!showLoader && (
+				<a.div
+					className={`tutorial-backdrop ${isTutorialOpen ? 'is-open' : 'is-docked'}`}
+					aria-hidden={!isTutorialOpen}
+				>
+					<a.div
+						className={`tutorial-modal ${isTutorialOpen ? 'is-open' : 'is-collapsed'}`}
+						style={{
+							transform: to(
+								[
+									tutorialCardProps.x,
+									tutorialCardProps.y,
+									tutorialCardProps.scale,
+									tutorialCardProps.rotate,
+								],
+								(x, y, scale, rotate) => `translate3d(${x}vw, ${y}vh, 0) scale(${scale}) rotate(${rotate}deg)`,
+							),
+						}}
+						role={isTutorialOpen ? 'dialog' : 'button'}
+						aria-modal={isTutorialOpen ? 'true' : undefined}
+						aria-labelledby={isTutorialOpen ? 'tutorial-title' : undefined}
+						aria-label={isTutorialOpen ? undefined : 'Open tutorial'}
+						tabIndex={isTutorialOpen ? undefined : 0}
+						onClick={isTutorialOpen ? undefined : handleTutorialOpen}
+						onKeyDown={isTutorialOpen ? undefined : handleTutorialLauncherKeyDown}
+					>
+						{isTutorialOpen ? (
+							<>
+								<div className="tutorial-modal-header">
+									<span>Quick tour</span>
+									<button
+										className="tutorial-close-button"
+										type="button"
+										onClick={handleTutorialClose}
+										aria-label="Close tutorial"
+									>
+										X
+									</button>
+								</div>
+								<div className="tutorial-carousel">
+									<TutorialPreview type={activeTutorialSlide.preview} />
+									<div className="tutorial-copy">
+										<small>
+											{tutorialSlide + 1}
+											/
+											{TUTORIAL_SLIDES.length}
+										</small>
+										<h2 id="tutorial-title">{activeTutorialSlide.title}</h2>
+										<p>{activeTutorialSlide.copy}</p>
+									</div>
+								</div>
+								<div className="tutorial-carousel-controls" aria-label="Tutorial slides">
+									<button
+										className="tutorial-secondary-button"
+										type="button"
+										onClick={handlePreviousTutorialSlide}
+									>
+										Previous
+									</button>
+									<div className="tutorial-dots">
+										{TUTORIAL_SLIDES.map((slide, index) => (
+											<button
+												key={slide.title}
+												type="button"
+												className={index === tutorialSlide ? 'is-active' : ''}
+												onClick={() => setTutorialSlide(index)}
+												aria-label={`Show ${slide.title}`}
+											/>
+										))}
+									</div>
+									<button
+										className="tutorial-primary-button"
+										type="button"
+										onClick={handleNextTutorialSlide}
+									>
+										Next
+									</button>
+								</div>
+							</>
+						) : (
+							<div className="tutorial-launch-glyph" aria-hidden="true">
+								?
+							</div>
+						)}
+					</a.div>
+				</a.div>
 			)}
 
 			<section className="viewer-panel" aria-label="Embedding controls">
