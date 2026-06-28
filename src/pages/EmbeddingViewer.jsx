@@ -18,6 +18,50 @@ const DEFAULT_POINT_COUNT = 2500;
 const DEFAULT_ANALOGY_LEFT = 'king';
 const DEFAULT_ANALOGY_SUBTRACT = 'man';
 const DEFAULT_ANALOGY_RIGHT = 'woman';
+const ANALOGY_PRESETS = [
+	{
+		id: 'royalty',
+		label: 'royalty',
+		left: 'king',
+		subtract: 'man',
+		right: 'woman',
+	},
+	{
+		id: 'pronouns',
+		label: 'pronouns',
+		left: 'he',
+		subtract: 'man',
+		right: 'woman',
+	},
+	{
+		id: 'roles',
+		label: 'roles',
+		left: 'actor',
+		subtract: 'man',
+		right: 'woman',
+	},
+	{
+		id: 'comparative',
+		label: 'comparative',
+		left: 'bigger',
+		subtract: 'big',
+		right: 'small',
+	},
+	{
+		id: 'geography',
+		label: 'geography',
+		left: 'japan',
+		subtract: 'tokyo',
+		right: 'paris',
+	},
+	{
+		id: 'tempo',
+		label: 'tempo',
+		left: 'quick',
+		subtract: 'quickly',
+		right: 'slowly',
+	},
+];
 const PRESENTATION_PHASES = [
 	{ delay: 950, step: 1 },
 	{ delay: 2600, step: 2 },
@@ -165,6 +209,17 @@ function EmbeddingViewer() {
 		return findExactWordMatch(embeddings, analogyRight);
 	}, [analogyRight, embeddings]);
 
+	const analogyPresets = useMemo(() => {
+		return ANALOGY_PRESETS.map((preset) => ({
+			...preset,
+			isAvailable: Boolean(
+				findExactWordMatch(embeddings, preset.left)
+				&& findExactWordMatch(embeddings, preset.subtract)
+				&& findExactWordMatch(embeddings, preset.right)
+			),
+		}));
+	}, [embeddings]);
+
 	const analogyLeftMatch = useMemo(() => {
 		return calculatedAnalogy ? findExactWordMatch(embeddings, calculatedAnalogy.left) : null;
 	}, [calculatedAnalogy, embeddings]);
@@ -281,6 +336,31 @@ function EmbeddingViewer() {
 	const focusedEmbedding = selectedEmbedding || searchMatch || hoveredEmbedding;
 	const arithmeticExpression = `${analogyLeftMatch?.word || analogyLeft || '?'} - ${analogySubtractMatch?.word || analogySubtract || '?'} + ${analogyRightMatch?.word || analogyRight || '?'}`;
 	const draftArithmeticExpression = `${draftAnalogyLeftMatch?.word || analogyLeft || '?'} - ${draftAnalogySubtractMatch?.word || analogySubtract || '?'} + ${draftAnalogyRightMatch?.word || analogyRight || '?'}`;
+	const activePresetId = useMemo(() => {
+		const normalizedExpression = [
+			draftAnalogyLeftMatch?.word || analogyLeft,
+			draftAnalogySubtractMatch?.word || analogySubtract,
+			draftAnalogyRightMatch?.word || analogyRight,
+		].map((word) => word.trim().toLowerCase());
+
+		return ANALOGY_PRESETS.find((preset) => (
+			preset.left === normalizedExpression[0]
+			&& preset.subtract === normalizedExpression[1]
+			&& preset.right === normalizedExpression[2]
+		))?.id || null;
+	}, [
+		analogyLeft,
+		analogyRight,
+		analogySubtract,
+		draftAnalogyLeftMatch,
+		draftAnalogyRightMatch,
+		draftAnalogySubtractMatch,
+	]);
+	const analogyExplanation = useMemo(() => {
+		if (!analogyResult || !analogyLeftMatch || !analogySubtractMatch || !analogyRightMatch) return '';
+
+		return `The direction from ${analogySubtractMatch.word} to ${analogyRightMatch.word} is applied to ${analogyLeftMatch.word}. ${analogyResult.word} is the nearest word to that new vector.`;
+	}, [analogyLeftMatch, analogyResult, analogyRightMatch, analogySubtractMatch]);
 	const handleTutorialClose = useCallback(() => {
 		setIsTutorialOpen(false);
 	}, []);
@@ -388,19 +468,43 @@ function EmbeddingViewer() {
 		setPointCount(Number(event.target.value));
 	};
 
-	const handleCalculateAnalogy = () => {
-		if (!canCalculateAnalogy) return;
-
+	const presentAnalogy = (leftMatch, subtractMatch, rightMatch) => {
 		setCalculatedAnalogy({
-			left: draftAnalogyLeftMatch.word,
-			subtract: draftAnalogySubtractMatch.word,
-			right: draftAnalogyRightMatch.word,
+			left: leftMatch.word,
+			subtract: subtractMatch.word,
+			right: rightMatch.word,
 		});
 		setVisibleCandidateIds([]);
 		setPresentationStep(0);
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
+	};
+
+	const handleCalculateAnalogy = () => {
+		if (!canCalculateAnalogy) return;
+
+		presentAnalogy(draftAnalogyLeftMatch, draftAnalogySubtractMatch, draftAnalogyRightMatch);
+	};
+
+	const handlePresetSelect = (preset) => {
+		setAnalogyLeft(preset.left);
+		setAnalogySubtract(preset.subtract);
+		setAnalogyRight(preset.right);
+
+		const presetLeftMatch = findExactWordMatch(embeddings, preset.left);
+		const presetSubtractMatch = findExactWordMatch(embeddings, preset.subtract);
+		const presetRightMatch = findExactWordMatch(embeddings, preset.right);
+
+		if (presetLeftMatch && presetSubtractMatch && presetRightMatch) {
+			presentAnalogy(presetLeftMatch, presetSubtractMatch, presetRightMatch);
+			return;
+		}
+
+		setCalculatedAnalogy(null);
+		setVisibleCandidateIds([]);
+		setPresentationStep(0);
+		setPresentationRunId((currentRunId) => currentRunId + 1);
 	};
 
 	const handleCandidateToggle = (candidateId) => {
@@ -601,6 +705,30 @@ function EmbeddingViewer() {
 						<small className={draftAnalogySubtractMatch ? 'is-valid' : 'is-missing'}>{draftAnalogySubtractMatch ? draftAnalogySubtractMatch.word : 'Subtract word not found'}</small>
 						<small className={draftAnalogyRightMatch ? 'is-valid' : 'is-missing'}>{draftAnalogyRightMatch ? draftAnalogyRightMatch.word : 'Second word not found'}</small>
 					</div>
+					<div className="preset-drawer">
+						<span>Relationship presets</span>
+						<div className="preset-grid">
+							{analogyPresets.map((preset) => (
+								<button
+									key={preset.id}
+									className={activePresetId === preset.id ? 'is-active' : ''}
+									type="button"
+									onClick={() => handlePresetSelect(preset)}
+									disabled={!preset.isAvailable || isPresentingAnalogy}
+									title={`${preset.left} - ${preset.subtract} + ${preset.right}`}
+								>
+									<strong>{preset.label}</strong>
+									<small>
+										{preset.left}
+										{' - '}
+										{preset.subtract}
+										{' + '}
+										{preset.right}
+									</small>
+								</button>
+							))}
+						</div>
+					</div>
 					<button
 						className="calculate-button"
 						type="button"
@@ -626,6 +754,12 @@ function EmbeddingViewer() {
 							<em>Inputs changed. Calculate to update the scene.</em>
 						)}
 					</div>
+					{shouldRevealAnalogyResult && analogyExplanation && (
+						<div className="analogy-explanation">
+							<span>Explain mode</span>
+							<p>{analogyExplanation}</p>
+						</div>
+					)}
 					{isAnalogyPresentationDone && analogyResults.length > 0 && (
 						<ol className="analogy-candidates">
 							<li className="is-answer" key={analogyResult.id}>

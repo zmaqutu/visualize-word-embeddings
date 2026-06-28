@@ -59,6 +59,8 @@ input {
 .range-control span,
 .focus-readout span,
 .analogy-card > span,
+.preset-drawer > span,
+.analogy-explanation span,
 .loading-status {
   margin: 0;
   color: #9fb4c9;
@@ -713,6 +715,77 @@ input {
   background: rgba(248, 113, 113, 0.1);
 }
 
+.preset-drawer {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(177, 199, 218, 0.14);
+  border-radius: 6px;
+  background: rgba(7, 13, 18, 0.34);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.preset-grid button {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid rgba(177, 199, 218, 0.18);
+  border-radius: 6px;
+  color: #dbe7f2;
+  background: rgba(13, 23, 32, 0.72);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+.preset-grid button:hover:not(:disabled) {
+  border-color: rgba(118, 228, 247, 0.46);
+  background: rgba(12, 55, 81, 0.42);
+  transform: translateY(-1px);
+}
+
+.preset-grid button.is-active {
+  border-color: rgba(52, 211, 153, 0.52);
+  color: #ecfdf5;
+  background: rgba(5, 77, 58, 0.42);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.08);
+}
+
+.preset-grid button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.preset-grid strong,
+.preset-grid small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-grid strong {
+  color: inherit;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.preset-grid small {
+  color: #9fb4c9;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
 .calculate-button {
   width: 100%;
   height: 42px;
@@ -784,6 +857,26 @@ input {
   font-size: 0.78rem;
   font-style: normal;
   font-weight: 800;
+}
+
+.analogy-explanation {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid rgba(118, 228, 247, 0.18);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(118, 228, 247, 0.1), rgba(52, 211, 153, 0.08)),
+    rgba(7, 13, 18, 0.38);
+  animation: stage-rise 420ms ease both;
+}
+
+.analogy-explanation p {
+  margin: 0;
+  color: #dbe7f2;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .analogy-candidates {
@@ -1046,6 +1139,10 @@ input {
   }
 
   .analogy-validation {
+    grid-template-columns: 1fr;
+  }
+
+  .preset-grid {
     grid-template-columns: 1fr;
   }
 }
