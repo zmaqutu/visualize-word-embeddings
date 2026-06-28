@@ -209,6 +209,7 @@ function EmbeddingViewer() {
 	const [presentationRunId, setPresentationRunId] = useState(0);
 	const [presentationStep, setPresentationStep] = useState(0);
 	const [pathRevealStep, setPathRevealStep] = useState(0);
+	const [timelinePlayback, setTimelinePlayback] = useState('auto');
 	const [visibleCandidateIds, setVisibleCandidateIds] = useState([]);
 	const [visibleCompareNeighborIds, setVisibleCompareNeighborIds] = useState([]);
 	const [isTutorialOpen, setIsTutorialOpen] = useState(true);
@@ -545,6 +546,44 @@ function EmbeddingViewer() {
 		? revealedSemanticPath.map((embedding) => embedding.word).join(' -> ')
 		: `${pathStartMatch?.word || pathStart || '?'} -> ${pathEndMatch?.word || pathEnd || '?'}`;
 	const isPathRevealDone = Boolean(calculatedPath && semanticPath.length > 1 && pathRevealStep >= semanticPath.length);
+	const arithmeticTimelineSteps = useMemo(() => {
+		if (!analogyResult || !analogyLeftMatch || !analogySubtractMatch || !analogyRightMatch) return [];
+
+		return [
+			'Ready',
+			`+ ${analogyLeftMatch.word}`,
+			`- ${analogySubtractMatch.word}`,
+			`+ ${analogyRightMatch.word}`,
+			`nearest ${analogyResult.word}`,
+			'candidates',
+		];
+	}, [analogyLeftMatch, analogyResult, analogyRightMatch, analogySubtractMatch]);
+	const pathTimelineSteps = useMemo(() => {
+		if (!calculatedPath || semanticPath.length === 0) return [];
+
+		return semanticPath.map((embedding, index) => (
+			index === 0 ? `start ${embedding.word}` : embedding.word
+		));
+	}, [calculatedPath, semanticPath]);
+	const activeTimeline = activeMode === 'arithmetic' && analogyResult
+		? {
+			mode: 'arithmetic',
+			value: presentationStep,
+			min: 0,
+			max: Math.max(0, arithmeticTimelineSteps.length - 1),
+			steps: arithmeticTimelineSteps,
+			currentLabel: arithmeticTimelineSteps[presentationStep] || 'Ready',
+		}
+		: activeMode === 'path' && calculatedPath && semanticPath.length > 0
+			? {
+				mode: 'path',
+				value: pathRevealStep,
+				min: 1,
+				max: semanticPath.length,
+				steps: pathTimelineSteps,
+				currentLabel: pathTimelineSteps[Math.max(0, pathRevealStep - 1)] || 'Start',
+			}
+			: null;
 	const activePathPresetId = useMemo(() => {
 		const normalizedStart = (draftPathStartMatch?.word || pathStart).trim().toLowerCase();
 		const normalizedEnd = (draftPathEndMatch?.word || pathEnd).trim().toLowerCase();
@@ -690,7 +729,7 @@ function EmbeddingViewer() {
 	]);
 
 	useEffect(() => {
-		if (!analogyResult) return undefined;
+		if (!analogyResult || timelinePlayback !== 'auto') return undefined;
 
 		const timeoutIds = PRESENTATION_PHASES.map(({ delay, step }) => (
 			window.setTimeout(() => setPresentationStep(step), delay)
@@ -699,10 +738,10 @@ function EmbeddingViewer() {
 		return () => {
 			timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
 		};
-	}, [analogyResult, presentationRunId]);
+	}, [analogyResult, presentationRunId, timelinePlayback]);
 
 	useEffect(() => {
-		if (!calculatedPath || semanticPath.length < 2) return undefined;
+		if (!calculatedPath || semanticPath.length < 2 || timelinePlayback !== 'auto') return undefined;
 
 		const timeoutIds = PATH_REVEAL_PHASES.map(({ delay, step }) => (
 			window.setTimeout(() => setPathRevealStep(Math.min(step, semanticPath.length)), delay)
@@ -711,7 +750,7 @@ function EmbeddingViewer() {
 		return () => {
 			timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
 		};
-	}, [calculatedPath, presentationRunId, semanticPath.length]);
+	}, [calculatedPath, presentationRunId, semanticPath.length, timelinePlayback]);
 
 	useEffect(() => {
 		if (!isTutorialOpen) return undefined;
@@ -730,6 +769,46 @@ function EmbeddingViewer() {
 		setPointCount(Number(event.target.value));
 	};
 
+	const setTimelineValue = (nextValue) => {
+		if (!activeTimeline) return;
+
+		const clampedValue = Math.min(activeTimeline.max, Math.max(activeTimeline.min, nextValue));
+		setTimelinePlayback('manual');
+
+		if (activeTimeline.mode === 'arithmetic') {
+			setPresentationStep(clampedValue);
+			return;
+		}
+
+		setPathRevealStep(clampedValue);
+	};
+
+	const handleTimelineScrub = (event) => {
+		setTimelineValue(Number(event.target.value));
+	};
+
+	const handleTimelinePrevious = () => {
+		if (!activeTimeline) return;
+		setTimelineValue(activeTimeline.value - 1);
+	};
+
+	const handleTimelineNext = () => {
+		if (!activeTimeline) return;
+		setTimelineValue(activeTimeline.value + 1);
+	};
+
+	const handleTimelineReplay = () => {
+		if (!activeTimeline) return;
+
+		setTimelinePlayback('auto');
+		if (activeTimeline.mode === 'arithmetic') {
+			setPresentationStep(0);
+		} else {
+			setPathRevealStep(1);
+		}
+		setPresentationRunId((currentRunId) => currentRunId + 1);
+	};
+
 	const presentAnalogy = (leftMatch, subtractMatch, rightMatch) => {
 		setActiveMode('arithmetic');
 		setCalculatedCompare(null);
@@ -743,6 +822,7 @@ function EmbeddingViewer() {
 		setVisibleCandidateIds([]);
 		setPresentationStep(0);
 		setPathRevealStep(0);
+		setTimelinePlayback('auto');
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
@@ -773,6 +853,7 @@ function EmbeddingViewer() {
 		setVisibleCandidateIds([]);
 		setPresentationStep(0);
 		setPathRevealStep(0);
+		setTimelinePlayback('auto');
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 	};
 
@@ -797,6 +878,7 @@ function EmbeddingViewer() {
 		setVisibleCompareNeighborIds([]);
 		setPresentationStep(0);
 		setPathRevealStep(0);
+		setTimelinePlayback('auto');
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
@@ -824,6 +906,7 @@ function EmbeddingViewer() {
 		setVisibleCompareNeighborIds([]);
 		setPresentationStep(0);
 		setPathRevealStep(1);
+		setTimelinePlayback('auto');
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
@@ -848,6 +931,7 @@ function EmbeddingViewer() {
 			setVisibleCompareNeighborIds([]);
 			setPresentationStep(0);
 			setPathRevealStep(1);
+			setTimelinePlayback('auto');
 			setPresentationRunId((currentRunId) => currentRunId + 1);
 			setHoveredEmbedding(null);
 			setSelectedEmbedding(null);
@@ -856,6 +940,7 @@ function EmbeddingViewer() {
 
 		setCalculatedPath(null);
 		setPathRevealStep(0);
+		setTimelinePlayback('auto');
 	};
 
 	const handleClear = () => {
@@ -873,6 +958,7 @@ function EmbeddingViewer() {
 		setVisibleCompareNeighborIds([]);
 		setPresentationStep(0);
 		setPathRevealStep(0);
+		setTimelinePlayback('auto');
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setSearchTerm('');
 		setHoveredEmbedding(null);
@@ -1156,6 +1242,59 @@ function EmbeddingViewer() {
 									<em>Inputs changed. Calculate to update the scene.</em>
 								)}
 							</div>
+							{activeTimeline?.mode === 'arithmetic' && (
+								<div className="timeline-scrubber">
+									<div className="timeline-header">
+										<span>Timeline</span>
+										<strong>{activeTimeline.currentLabel}</strong>
+									</div>
+									<div className="timeline-controls">
+										<button
+											type="button"
+											onClick={handleTimelinePrevious}
+											disabled={activeTimeline.value <= activeTimeline.min}
+											aria-label="Previous arithmetic step"
+										>
+											Prev
+										</button>
+										<input
+											type="range"
+											min={activeTimeline.min}
+											max={activeTimeline.max}
+											step="1"
+											value={activeTimeline.value}
+											onChange={handleTimelineScrub}
+											aria-label="Arithmetic timeline step"
+										/>
+										<button
+											type="button"
+											onClick={handleTimelineNext}
+											disabled={activeTimeline.value >= activeTimeline.max}
+											aria-label="Next arithmetic step"
+										>
+											Next
+										</button>
+										<button
+											type="button"
+											onClick={handleTimelineReplay}
+											aria-label="Replay arithmetic animation"
+										>
+											Replay
+										</button>
+									</div>
+									<ol className="timeline-steps">
+										{activeTimeline.steps.map((step, index) => (
+											<li
+												key={step}
+												className={index <= activeTimeline.value ? 'is-active' : ''}
+											>
+												<span>{index}</span>
+												<strong>{step}</strong>
+											</li>
+										))}
+									</ol>
+								</div>
+							)}
 							{shouldRevealAnalogyResult && analogyExplanation && (
 								<div className="analogy-explanation">
 									<span>Explain mode</span>
@@ -1381,6 +1520,62 @@ function EmbeddingViewer() {
 									<em>Inputs changed. Find path to update the scene.</em>
 								)}
 							</div>
+							{activeTimeline?.mode === 'path' && (
+								<div className="timeline-scrubber path-timeline">
+									<div className="timeline-header">
+										<span>Timeline</span>
+										<strong>{activeTimeline.currentLabel}</strong>
+									</div>
+									<div className="timeline-controls">
+										<button
+											type="button"
+											onClick={handleTimelinePrevious}
+											disabled={activeTimeline.value <= activeTimeline.min}
+											aria-label="Previous path step"
+										>
+											Prev
+										</button>
+										<input
+											type="range"
+											min={activeTimeline.min}
+											max={activeTimeline.max}
+											step="1"
+											value={activeTimeline.value}
+											onChange={handleTimelineScrub}
+											aria-label="Path timeline step"
+										/>
+										<button
+											type="button"
+											onClick={handleTimelineNext}
+											disabled={activeTimeline.value >= activeTimeline.max}
+											aria-label="Next path step"
+										>
+											Next
+										</button>
+										<button
+											type="button"
+											onClick={handleTimelineReplay}
+											aria-label="Replay path animation"
+										>
+											Replay
+										</button>
+									</div>
+									<ol className="timeline-steps">
+										{activeTimeline.steps.map((step, index) => {
+											const displayIndex = activeTimeline.min + index;
+											return (
+												<li
+													key={`${step}-${displayIndex}`}
+													className={displayIndex <= activeTimeline.value ? 'is-active' : ''}
+												>
+													<span>{displayIndex}</span>
+													<strong>{step}</strong>
+												</li>
+											);
+										})}
+									</ol>
+								</div>
+							)}
 							{calculatedPath && pathExplanation && (
 								<div className="analogy-explanation path-explanation">
 									<span>Path readout</span>

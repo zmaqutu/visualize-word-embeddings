@@ -16,6 +16,18 @@ const COMPARE_NEIGHBOR_COLOR = new THREE.Color('#76e4f7');
 const PATH_WORD_COLOR = new THREE.Color('#f472b6');
 const DIM_COLOR = new THREE.Color('#536170');
 
+const getLabelLift = ({
+	isAnalogyResult,
+	isPrimaryWord,
+	isAnalogyInput,
+	isSecondaryWord,
+}) => {
+	if (isAnalogyResult) return 8.5;
+	if (isPrimaryWord || isAnalogyInput) return 6;
+	if (isSecondaryWord) return 4.5;
+	return 3.5;
+};
+
 const beamVertexShader = `
 varying vec2 vUv;
 
@@ -82,7 +94,7 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }
 	const labelPosition = useMemo(() => {
 		return [
 			(from.reducedVector[0] + to.reducedVector[0]) / 2,
-			(from.reducedVector[1] + to.reducedVector[1]) / 2 + 8,
+			(from.reducedVector[1] + to.reducedVector[1]) / 2 + 4.5,
 			(from.reducedVector[2] + to.reducedVector[2]) / 2,
 		];
 	}, [from, to]);
@@ -531,7 +543,12 @@ function CartesianSpace({
 					key={embedding.id}
 					position={[
 						embedding.reducedVector[0],
-						embedding.reducedVector[1] + (embedding.id === analogyResultId ? 13 : compareWordIdSet.has(embedding.id) || pathWordIdSet.has(embedding.id) ? 9 : analogyInputIdSet.has(embedding.id) ? 9 : visibleCandidateIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id) ? 7 : 5),
+						embedding.reducedVector[1] + getLabelLift({
+							isAnalogyResult: embedding.id === analogyResultId,
+							isPrimaryWord: compareWordIdSet.has(embedding.id) || pathWordIdSet.has(embedding.id),
+							isAnalogyInput: analogyInputIdSet.has(embedding.id),
+							isSecondaryWord: visibleCandidateIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id),
+						}),
 						embedding.reducedVector[2],
 					]}
 					center
