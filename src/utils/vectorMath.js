@@ -10,6 +10,13 @@ export const findWordMatch = (embeddings, term) => {
 		|| null;
 };
 
+export const findExactWordMatch = (embeddings, term) => {
+	const normalizedSearch = normalizeWord(term);
+	if (!normalizedSearch || embeddings.length === 0) return null;
+
+	return embeddings.find(({ word }) => normalizeWord(word) === normalizedSearch) || null;
+};
+
 export const buildVectorNorms = (vectorValues, vectorDimensions, count) => {
 	if (!vectorValues || vectorDimensions === 0 || count === 0) return [];
 
@@ -24,6 +31,82 @@ export const buildVectorNorms = (vectorValues, vectorDimensions, count) => {
 
 		return Math.sqrt(sum) || 1;
 	});
+};
+
+const createProjectionAxis = (axis, dimensions) => {
+	const vector = new Float64Array(dimensions);
+	let magnitude = 0;
+
+	for (let dimension = 0; dimension < dimensions; dimension += 1) {
+		const seed = (axis + 1) * (dimension + 1);
+		const value = Math.sin(seed * 12.9898) + Math.cos(seed * 78.233);
+		vector[dimension] = value;
+		magnitude += value * value;
+	}
+
+	const normalizer = Math.sqrt(magnitude) || 1;
+	for (let dimension = 0; dimension < dimensions; dimension += 1) {
+		vector[dimension] /= normalizer;
+	}
+
+	return vector;
+};
+
+export const buildProjectionModel = (vectorValues, vectorDimensions, count) => {
+	if (!vectorValues || vectorDimensions === 0 || count === 0) return null;
+
+	const means = new Float64Array(vectorDimensions);
+
+	for (let row = 0; row < count; row += 1) {
+		const rowOffset = row * vectorDimensions;
+		for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+			means[dimension] += vectorValues[rowOffset + dimension];
+		}
+	}
+
+	for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+		means[dimension] /= count;
+	}
+
+	const projection = Array.from({ length: 3 }, (_, axis) => createProjectionAxis(axis, vectorDimensions));
+	let maxAbsValue = 1;
+
+	for (let row = 0; row < count; row += 1) {
+		const rowOffset = row * vectorDimensions;
+		for (let axis = 0; axis < 3; axis += 1) {
+			let projectedValue = 0;
+			for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+				projectedValue += (vectorValues[rowOffset + dimension] - means[dimension]) * projection[axis][dimension];
+			}
+			maxAbsValue = Math.max(maxAbsValue, Math.abs(projectedValue));
+		}
+	}
+
+	return {
+		means,
+		projection,
+		scaleFactor: 145 / maxAbsValue,
+		vectorDimensions,
+	};
+};
+
+export const projectVector = (vector, projectionModel) => {
+	if (!vector || !projectionModel) return [0, 0, 0];
+
+	return projectionModel.projection.map((axisVector) => {
+		let projectedValue = 0;
+		for (let dimension = 0; dimension < projectionModel.vectorDimensions; dimension += 1) {
+			projectedValue += (vector[dimension] - projectionModel.means[dimension]) * axisVector[dimension];
+		}
+		return projectedValue * projectionModel.scaleFactor;
+	});
+};
+
+export const getVector = (embedding, vectorValues, vectorDimensions) => {
+	if (!embedding || !vectorValues || vectorDimensions === 0) return null;
+
+	const offset = embedding.id * vectorDimensions;
+	return vectorValues.slice(offset, offset + vectorDimensions);
 };
 
 export const solveAnalogy = ({

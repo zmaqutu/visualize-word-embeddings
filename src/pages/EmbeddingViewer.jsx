@@ -4,12 +4,27 @@ import useWordEmbeddings from '../hooks/useWordEmbeddings';
 import { Canvas } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSpring, a } from '@react-spring/web';
-import { buildVectorNorms, findWordMatch, solveAnalogy } from '../utils/vectorMath';
+import {
+	buildProjectionModel,
+	buildVectorNorms,
+	findExactWordMatch,
+	findWordMatch,
+	getVector,
+	projectVector,
+	solveAnalogy,
+} from '../utils/vectorMath';
 
 const DEFAULT_POINT_COUNT = 2500;
 const DEFAULT_ANALOGY_LEFT = 'king';
 const DEFAULT_ANALOGY_SUBTRACT = 'man';
 const DEFAULT_ANALOGY_RIGHT = 'woman';
+const PRESENTATION_PHASES = [
+	{ delay: 950, step: 1 },
+	{ delay: 2600, step: 2 },
+	{ delay: 4250, step: 3 },
+	{ delay: 5900, step: 4 },
+	{ delay: 7200, step: 5 },
+];
 
 function EmbeddingViewer() {
 	const { embeddings, loading, error, status, vectorValues, vectorDimensions } = useWordEmbeddings();
@@ -23,28 +38,61 @@ function EmbeddingViewer() {
 	const [analogyLeft, setAnalogyLeft] = useState(DEFAULT_ANALOGY_LEFT);
 	const [analogySubtract, setAnalogySubtract] = useState(DEFAULT_ANALOGY_SUBTRACT);
 	const [analogyRight, setAnalogyRight] = useState(DEFAULT_ANALOGY_RIGHT);
+	const [calculatedAnalogy, setCalculatedAnalogy] = useState(null);
+	const [presentationRunId, setPresentationRunId] = useState(0);
+	const [presentationStep, setPresentationStep] = useState(0);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
 	const maxPointCount = Math.max(embeddings.length, DEFAULT_POINT_COUNT);
 	const vectorNorms = useMemo(() => {
 		return buildVectorNorms(vectorValues, vectorDimensions, embeddings.length);
 	}, [embeddings.length, vectorDimensions, vectorValues]);
+	const projectionModel = useMemo(() => {
+		return buildProjectionModel(vectorValues, vectorDimensions, embeddings.length);
+	}, [embeddings.length, vectorDimensions, vectorValues]);
 
 	const searchMatch = useMemo(() => {
 		return findWordMatch(embeddings, searchTerm);
 	}, [embeddings, searchTerm]);
 
-	const analogyLeftMatch = useMemo(() => {
-		return findWordMatch(embeddings, analogyLeft);
+	const draftAnalogyLeftMatch = useMemo(() => {
+		return findExactWordMatch(embeddings, analogyLeft);
 	}, [analogyLeft, embeddings]);
 
-	const analogySubtractMatch = useMemo(() => {
-		return findWordMatch(embeddings, analogySubtract);
+	const draftAnalogySubtractMatch = useMemo(() => {
+		return findExactWordMatch(embeddings, analogySubtract);
 	}, [analogySubtract, embeddings]);
 
-	const analogyRightMatch = useMemo(() => {
-		return findWordMatch(embeddings, analogyRight);
+	const draftAnalogyRightMatch = useMemo(() => {
+		return findExactWordMatch(embeddings, analogyRight);
 	}, [analogyRight, embeddings]);
+
+	const analogyLeftMatch = useMemo(() => {
+		return calculatedAnalogy ? findExactWordMatch(embeddings, calculatedAnalogy.left) : null;
+	}, [calculatedAnalogy, embeddings]);
+
+	const analogySubtractMatch = useMemo(() => {
+		return calculatedAnalogy ? findExactWordMatch(embeddings, calculatedAnalogy.subtract) : null;
+	}, [calculatedAnalogy, embeddings]);
+
+	const analogyRightMatch = useMemo(() => {
+		return calculatedAnalogy ? findExactWordMatch(embeddings, calculatedAnalogy.right) : null;
+	}, [calculatedAnalogy, embeddings]);
+
+	const canCalculateAnalogy = Boolean(
+		draftAnalogyLeftMatch
+		&& draftAnalogySubtractMatch
+		&& draftAnalogyRightMatch
+		&& vectorValues
+		&& vectorNorms.length > 0,
+	);
+
+	const hasPendingAnalogyChanges = calculatedAnalogy
+		&& (
+			calculatedAnalogy.left !== draftAnalogyLeftMatch?.word
+			|| calculatedAnalogy.subtract !== draftAnalogySubtractMatch?.word
+			|| calculatedAnalogy.right !== draftAnalogyRightMatch?.word
+		);
 
 	const analogyResults = useMemo(() => {
 		return solveAnalogy({
@@ -68,6 +116,9 @@ function EmbeddingViewer() {
 	]);
 
 	const analogyResult = analogyResults[0] || null;
+	const isPresentingAnalogy = Boolean(analogyResult && presentationStep < 5);
+	const isAnalogyPresentationDone = Boolean(analogyResult && presentationStep >= 5);
+	const shouldRevealAnalogyResult = Boolean(analogyResult && presentationStep >= 4);
 	const analogyInputIds = useMemo(() => {
 		return [analogyLeftMatch?.id, analogySubtractMatch?.id, analogyRightMatch?.id].filter(Number.isInteger);
 	}, [analogyLeftMatch, analogyRightMatch, analogySubtractMatch]);
@@ -77,15 +128,58 @@ function EmbeddingViewer() {
 	}, [analogyInputIds, analogyResult]);
 
 	const analogyLinks = useMemo(() => {
-		if (!analogyResult) return [];
+		if (!analogyResult || !projectionModel) return [];
 
-		return analogyRightMatch && analogyRightMatch.id !== analogyResult.id
-			? [{ from: analogyRightMatch, to: analogyResult, variant: 'analogy' }]
-			: [];
-	}, [analogyResult, analogyRightMatch]);
+		const leftVector = getVector(analogyLeftMatch, vectorValues, vectorDimensions);
+		const subtractVector = getVector(analogySubtractMatch, vectorValues, vectorDimensions);
+		const rightVector = getVector(analogyRightMatch, vectorValues, vectorDimensions);
+
+		if (!leftVector || !subtractVector || !rightVector) return [];
+
+		const minusVector = new Float32Array(vectorDimensions);
+		const targetVector = new Float32Array(vectorDimensions);
+
+		for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+			minusVector[dimension] = leftVector[dimension] - subtractVector[dimension];
+			targetVector[dimension] = minusVector[dimension] + rightVector[dimension];
+		}
+
+		const origin = { id: 'origin', word: 'origin', reducedVector: [0, 0, 0] };
+		const leftPoint = {
+			id: 'left-vector',
+			word: analogyLeftMatch.word,
+			reducedVector: projectVector(leftVector, projectionModel),
+		};
+		const minusPoint = {
+			id: 'minus-vector',
+			word: `${analogyLeftMatch.word} - ${analogySubtractMatch.word}`,
+			reducedVector: projectVector(minusVector, projectionModel),
+		};
+		const targetPoint = {
+			id: 'target-vector',
+			word: `${analogyLeftMatch.word} - ${analogySubtractMatch.word} + ${analogyRightMatch.word}`,
+			reducedVector: projectVector(targetVector, projectionModel),
+		};
+
+		return [
+			{ from: origin, to: leftPoint, label: `+ ${analogyLeftMatch.word}`, variant: 'trail-add' },
+			{ from: leftPoint, to: minusPoint, label: `- ${analogySubtractMatch.word}`, variant: 'trail-subtract' },
+			{ from: minusPoint, to: targetPoint, label: `+ ${analogyRightMatch.word}`, variant: 'trail-add' },
+			{ from: targetPoint, to: analogyResult, label: `nearest: ${analogyResult.word}`, variant: 'analogy' },
+		];
+	}, [
+		analogyLeftMatch,
+		analogyResult,
+		analogyRightMatch,
+		analogySubtractMatch,
+		projectionModel,
+		vectorDimensions,
+		vectorValues,
+	]);
 
 	const focusedEmbedding = selectedEmbedding || searchMatch || hoveredEmbedding;
 	const arithmeticExpression = `${analogyLeftMatch?.word || analogyLeft || '?'} - ${analogySubtractMatch?.word || analogySubtract || '?'} + ${analogyRightMatch?.word || analogyRight || '?'}`;
+	const draftArithmeticExpression = `${draftAnalogyLeftMatch?.word || analogyLeft || '?'} - ${draftAnalogySubtractMatch?.word || analogySubtract || '?'} + ${draftAnalogyRightMatch?.word || analogyRight || '?'}`;
 
 	const loaderProps = useSpring({
 		opacity: loading ? 1 : 0,
@@ -130,8 +224,47 @@ function EmbeddingViewer() {
 		setPointCount(nextCount);
 	}, [analogyIds, embeddings.length, pointCount]);
 
+	useEffect(() => {
+		if (!analogyResult) return undefined;
+
+		const timeoutIds = PRESENTATION_PHASES.map(({ delay, step }) => (
+			window.setTimeout(() => setPresentationStep(step), delay)
+		));
+
+		return () => {
+			timeoutIds.forEach((timeoutId) => window.clearTimeout(timeoutId));
+		};
+	}, [analogyResult, presentationRunId]);
+
 	const handlePointCountChange = (event) => {
 		setPointCount(Number(event.target.value));
+	};
+
+	const handleCalculateAnalogy = () => {
+		if (!canCalculateAnalogy) return;
+
+		setCalculatedAnalogy({
+			left: draftAnalogyLeftMatch.word,
+			subtract: draftAnalogySubtractMatch.word,
+			right: draftAnalogyRightMatch.word,
+		});
+		setPresentationStep(0);
+		setPresentationRunId((currentRunId) => currentRunId + 1);
+		setHoveredEmbedding(null);
+		setSelectedEmbedding(null);
+	};
+
+	const handleClear = () => {
+		setAnalogyLeft('');
+		setAnalogySubtract('');
+		setAnalogyRight('');
+		setCalculatedAnalogy(null);
+		setPresentationStep(0);
+		setPresentationRunId((currentRunId) => currentRunId + 1);
+		setSearchTerm('');
+		setHoveredEmbedding(null);
+		setSelectedEmbedding(null);
+		setPointCount(Math.min(DEFAULT_POINT_COUNT, embeddings.length || DEFAULT_POINT_COUNT));
 	};
 
 	return (
@@ -162,12 +295,15 @@ function EmbeddingViewer() {
 					analogyInputIds={analogyInputIds}
 					analogyResultId={analogyResult?.id}
 					analogyLinks={analogyLinks}
+					analogyRevealStep={presentationStep}
+					analogyPresentationDone={isAnalogyPresentationDone}
+					presentationRunId={presentationRunId}
 					onHover={setHoveredEmbedding}
 					onSelect={setSelectedEmbedding}
 				/>
 			</Canvas>
 
-			{analogyResult && (
+			{shouldRevealAnalogyResult && (
 				<div className="analogy-stage-readout" aria-live="polite">
 					<span>{arithmeticExpression}</span>
 					<strong>{analogyResult.word}</strong>
@@ -213,14 +349,37 @@ function EmbeddingViewer() {
 							aria-label="Second added word"
 						/>
 					</div>
+					<div className="analogy-validation" aria-live="polite">
+						<small className={draftAnalogyLeftMatch ? 'is-valid' : 'is-missing'}>{draftAnalogyLeftMatch ? draftAnalogyLeftMatch.word : 'First word not found'}</small>
+						<small className={draftAnalogySubtractMatch ? 'is-valid' : 'is-missing'}>{draftAnalogySubtractMatch ? draftAnalogySubtractMatch.word : 'Subtract word not found'}</small>
+						<small className={draftAnalogyRightMatch ? 'is-valid' : 'is-missing'}>{draftAnalogyRightMatch ? draftAnalogyRightMatch.word : 'Second word not found'}</small>
+					</div>
+					<button
+						className="calculate-button"
+						type="button"
+						onClick={handleCalculateAnalogy}
+						disabled={!canCalculateAnalogy || isPresentingAnalogy}
+					>
+						{isPresentingAnalogy ? 'Drawing...' : hasPendingAnalogyChanges ? 'Recalculate' : 'Calculate'}
+					</button>
+					<button
+						className="clear-button"
+						type="button"
+						onClick={handleClear}
+					>
+						Clear
+					</button>
 					<div className="analogy-result">
-						<small>{arithmeticExpression}</small>
-						<strong>{analogyResult ? analogyResult.word : 'No result yet'}</strong>
-						{analogyResult && (
+						<small>{analogyResult ? arithmeticExpression : draftArithmeticExpression}</small>
+						<strong>{shouldRevealAnalogyResult ? analogyResult.word : analogyResult ? 'Drawing calculation...' : 'Ready when you calculate'}</strong>
+						{shouldRevealAnalogyResult && (
 							<em>{(analogyResult.score * 100).toFixed(1)}% cosine match</em>
 						)}
+						{hasPendingAnalogyChanges && (
+							<em>Inputs changed. Calculate to update the scene.</em>
+						)}
 					</div>
-					{analogyResults.length > 0 && (
+					{isAnalogyPresentationDone && analogyResults.length > 0 && (
 						<ol className="analogy-candidates">
 							{analogyResults.slice(0, 5).map((candidate) => (
 								<li key={candidate.id}>

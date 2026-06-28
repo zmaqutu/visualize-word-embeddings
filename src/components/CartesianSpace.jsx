@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { Html, OrbitControls } from '@react-three/drei';
+import { Html, OrbitControls, Sphere, Trail } from '@react-three/drei';
 import * as THREE from 'three';
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -35,9 +35,11 @@ void main() {
 }
 `;
 
-function AnimatedBeam({ from, to, color, label, variant = 'analogy' }) {
+function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }) {
 	const beamMaterialRef = useRef();
 	const glowMaterialRef = useRef();
+	const tracerRef = useRef();
+	const trailStartTimeRef = useRef(null);
 	const arrowParts = useMemo(() => {
 		const start = new THREE.Vector3(...from.reducedVector);
 		const end = new THREE.Vector3(...to.reducedVector);
@@ -56,6 +58,8 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy' }) {
 			length,
 			midpoint,
 			quaternion,
+			start,
+			end,
 			headPosition: start.clone().lerp(end, 0.9),
 			headLength: Math.max(6, Math.min(16, length * 0.16)),
 			beamLength: Math.max(1, length * 0.82),
@@ -77,6 +81,10 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy' }) {
 	}, [from, to]);
 
 	useFrame(({ clock }) => {
+		if (trailStartTimeRef.current === null) {
+			trailStartTimeRef.current = clock.elapsedTime;
+		}
+
 		if (beamMaterialRef.current) {
 			beamMaterialRef.current.uniforms.uTime.value = clock.elapsedTime * 0.55;
 		}
@@ -84,6 +92,12 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy' }) {
 		if (glowMaterialRef.current) {
 			glowMaterialRef.current.opacity = (variant === 'analogy' ? 0.24 : 0.16)
 				+ Math.sin(clock.elapsedTime * 2.2) * 0.06;
+		}
+
+		if (tracerRef.current && arrowParts) {
+			const segmentProgress = THREE.MathUtils.clamp((clock.elapsedTime - trailStartTimeRef.current - delay) / 1.18, 0, 1);
+			const easedProgress = 1 - ((1 - segmentProgress) ** 3);
+			tracerRef.current.position.lerpVectors(arrowParts.start, arrowParts.end, easedProgress);
 		}
 	});
 
@@ -121,6 +135,16 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy' }) {
 					<meshBasicMaterial color={color} transparent opacity={0.96} />
 				</mesh>
 			</group>
+			<Trail
+				width={variant === 'analogy' ? 7 : 5}
+				length={18}
+				color={color}
+				attenuation={(t) => t * t}
+			>
+				<Sphere ref={tracerRef} args={[variant === 'analogy' ? 1.9 : 1.45, 20, 20]} position={arrowParts.start}>
+					<meshBasicMaterial color={color} transparent opacity={0.76} />
+				</Sphere>
+			</Trail>
 			<Html position={labelPosition} center zIndexRange={[80, 0]} className={`arrow-label ${variant === 'analogy' ? 'analogy-arrow-label' : ''}`}>
 				{label}
 			</Html>
@@ -138,6 +162,9 @@ function CartesianSpace({
 	analogyInputIds,
 	analogyResultId,
 	analogyLinks,
+	analogyRevealStep = 0,
+	analogyPresentationDone = false,
+	presentationRunId = 0,
 	onHover,
 	onSelect,
 }) {
@@ -163,6 +190,15 @@ function CartesianSpace({
 		return new Set(analogyInputIds);
 	}, [analogyInputIds]);
 
+	const isAnalogyFocusMode = Number.isInteger(analogyResultId);
+	const focusProgressRef = useRef(0);
+
+	const renderedEmbeddings = useMemo(() => {
+		if (!isAnalogyFocusMode || !analogyPresentationDone) return visibleEmbeddings;
+
+		return visibleEmbeddings.filter((embedding) => analogyIdSet.has(embedding.id));
+	}, [analogyIdSet, analogyPresentationDone, isAnalogyFocusMode, visibleEmbeddings]);
+
 	const geometry = useMemo(() => new THREE.SphereGeometry(0.72, 12, 12), []);
 	const material = useMemo(() => new THREE.MeshStandardMaterial({
 		color: BASE_COLOR,
@@ -171,13 +207,13 @@ function CartesianSpace({
 	}), []);
 
 	const wordEmbeddingsMesh = useMemo(() => {
-		if (visibleEmbeddings.length === 0) return null;
+		if (renderedEmbeddings.length === 0) return null;
 
-		const mesh = new THREE.InstancedMesh(geometry, material, visibleEmbeddings.length);
+		const mesh = new THREE.InstancedMesh(geometry, material, renderedEmbeddings.length);
 		const matrix = new THREE.Matrix4();
 		const position = new THREE.Vector3();
 
-		visibleEmbeddings.forEach(({ reducedVector }, index) => {
+		renderedEmbeddings.forEach(({ reducedVector }, index) => {
 			position.set(reducedVector[0], reducedVector[1], reducedVector[2]);
 			matrix.setPosition(position);
 			mesh.setColorAt(index, BASE_COLOR);
@@ -189,16 +225,29 @@ function CartesianSpace({
 		wordEmbeddingsMeshRef.current = mesh;
 
 		return mesh;
-	}, [geometry, material, visibleEmbeddings]);
+	}, [geometry, material, renderedEmbeddings]);
 
-	useEffect(() => {
+	useFrame((_, delta) => {
 		if (!wordEmbeddingsMesh) return;
+
+		const targetFocusProgress = isAnalogyFocusMode ? 1 : 0;
+		focusProgressRef.current = THREE.MathUtils.damp(
+			focusProgressRef.current,
+			targetFocusProgress,
+			2.25,
+			delta,
+		);
+
 		const matrix = new THREE.Matrix4();
 		const position = new THREE.Vector3();
 		const rotation = new THREE.Quaternion();
+		const focusProgress = focusProgressRef.current;
+		const activeScaleBoost = THREE.MathUtils.lerp(1, 1.12, focusProgress);
+		const dimColor = new THREE.Color('#15232d');
+		const colorScratch = new THREE.Color();
 
-		for (let index = 0; index < visibleEmbeddings.length; index += 1) {
-			const embeddingId = visibleEmbeddings[index].id;
+		for (let index = 0; index < renderedEmbeddings.length; index += 1) {
+			const embeddingId = renderedEmbeddings[index].id;
 			const isAnalogyInput = analogyInputIdSet.has(embeddingId);
 			const isAnalogyResult = embeddingId === analogyResultId;
 			const isActive = embeddingId === selectedId
@@ -222,25 +271,21 @@ function CartesianSpace({
 									? DIM_COLOR
 									: BASE_COLOR;
 
-			position.set(...visibleEmbeddings[index].reducedVector);
-			const scale = isAnalogyResult ? 3.15 : isAnalogyInput ? 2.35 : isActive ? 1.9 : 1;
+			position.set(...renderedEmbeddings[index].reducedVector);
+			const inactiveFocusScale = isAnalogyFocusMode && !isActive
+				? THREE.MathUtils.lerp(1, 0.1, focusProgress)
+				: 1;
+			const baseScale = isAnalogyResult ? 3.15 : isAnalogyInput ? 2.35 : isActive ? 1.9 : 1;
+			const scale = baseScale * inactiveFocusScale * (isActive ? activeScaleBoost : 1);
+			colorScratch.copy(color).lerp(dimColor, isAnalogyFocusMode && !isActive ? focusProgress : 0);
 			matrix.compose(position, rotation, new THREE.Vector3(scale, scale, scale));
-			wordEmbeddingsMesh.setColorAt(index, color);
+			wordEmbeddingsMesh.setColorAt(index, colorScratch);
 			wordEmbeddingsMesh.setMatrixAt(index, matrix);
 		}
 
 		wordEmbeddingsMesh.instanceMatrix.needsUpdate = true;
 		wordEmbeddingsMesh.instanceColor.needsUpdate = true;
-	}, [
-		analogyIdSet,
-		analogyInputIdSet,
-		analogyResultId,
-		hoveredId,
-		searchId,
-		selectedId,
-		visibleEmbeddings,
-		wordEmbeddingsMesh,
-	]);
+	});
 
 	useEffect(() => () => {
 		geometry.dispose();
@@ -257,7 +302,7 @@ function CartesianSpace({
 		const intersects = raycasterRef.current.intersectObject(wordEmbeddingsMeshRef.current);
 		const instanceId = intersects[0]?.instanceId;
 
-		return Number.isInteger(instanceId) ? visibleEmbeddings[instanceId] : null;
+		return Number.isInteger(instanceId) ? renderedEmbeddings[instanceId] : null;
 	};
 
 	const handlePointerMove = (event) => {
@@ -283,7 +328,9 @@ function CartesianSpace({
 	const activeLabels = useMemo(() => {
 		const labelMap = new Map();
 
-		[...analogyIds, searchId, selectedId, hoveredId].forEach((id) => {
+		const revealedAnalogyIds = analogyIds.slice(0, Math.min(analogyRevealStep, analogyIds.length));
+
+		[...revealedAnalogyIds, searchId, selectedId, hoveredId].forEach((id) => {
 			const embedding = visibleEmbeddingsById.get(id);
 			if (embedding) {
 				labelMap.set(embedding.id, embedding);
@@ -291,14 +338,15 @@ function CartesianSpace({
 		});
 
 		return Array.from(labelMap.values());
-	}, [analogyIds, hoveredId, searchId, selectedId, visibleEmbeddingsById]);
+	}, [analogyIds, analogyRevealStep, hoveredId, searchId, selectedId, visibleEmbeddingsById]);
 
 	const visibleAnalogyLinks = useMemo(() => {
 		const linkMap = new Map();
 
 		analogyLinks
+			.slice(0, Math.min(analogyRevealStep, analogyLinks.length))
 			.filter(({ from, to }) => (
-				visibleEmbeddingsById.has(from.id) && visibleEmbeddingsById.has(to.id)
+				Array.isArray(from.reducedVector) && Array.isArray(to.reducedVector)
 			))
 			.forEach((link) => {
 				const key = `${link.from.id}-${link.to.id}`;
@@ -306,7 +354,7 @@ function CartesianSpace({
 			});
 
 		return Array.from(linkMap.values());
-	}, [analogyLinks, visibleEmbeddingsById]);
+	}, [analogyLinks, analogyRevealStep]);
 
 	return (
 		<>
@@ -323,14 +371,15 @@ function CartesianSpace({
 					onClick={handleClick}
 				/>
 			)}
-			{visibleAnalogyLinks.map(({ from, to, variant = 'analogy' }) => (
+			{visibleAnalogyLinks.map(({ from, to, label, variant = 'analogy' }) => (
 				<AnimatedBeam
-					key={`${from.id}-${to.id}`}
+					key={`${presentationRunId}-${from.id}-${to.id}`}
 					from={from}
 					to={to}
-					color={variant === 'analogy' ? '#34d399' : '#38bdf8'}
-					label={`${from.word} -> ${to.word}`}
+					color={variant === 'trail-subtract' ? '#fb7185' : variant === 'analogy' ? '#34d399' : '#38bdf8'}
+					label={label || (variant === 'analogy' ? `${from.word} -> ${to.word}` : `${from.word} ${variant === 'trail-subtract' ? '−' : '→'} ${to.word}`)}
 					variant={variant}
+					delay={0}
 				/>
 			))}
 			{activeLabels.map((embedding) => (
