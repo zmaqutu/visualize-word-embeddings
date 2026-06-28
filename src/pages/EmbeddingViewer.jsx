@@ -97,9 +97,24 @@ const TUTORIAL_SLIDES = [
 		preview: 'visible',
 	},
 	{
+		title: 'Find any word',
+		copy: 'Search jumps straight to a word and expands the visible set when the match sits deeper in the vocabulary.',
+		preview: 'search',
+	},
+	{
 		title: 'Hover and select',
 		copy: 'Move over a point to preview its label, then click to keep a word pinned while you inspect nearby terms.',
 		preview: 'hover',
+	},
+	{
+		title: 'Start with presets',
+		copy: 'Use the preset chips when you want a reliable example before typing your own words into the same controls.',
+		preview: 'presets',
+	},
+	{
+		title: 'Compare two words',
+		copy: 'Switch to Compare, calculate a relationship, and inspect shared neighbors alongside the words that pull each side apart.',
+		preview: 'compare',
 	},
 	{
 		title: 'Run vector arithmetic',
@@ -107,11 +122,106 @@ const TUTORIAL_SLIDES = [
 		preview: 'arithmetic',
 	},
 	{
-		title: 'Find a word',
-		copy: 'Search jumps straight to a word and expands the visible set when the match sits deeper in the vocabulary.',
-		preview: 'search',
+		title: 'Trace semantic paths',
+		copy: 'Path mode draws a bridge between two words, revealing intermediate concepts one step at a time.',
+		preview: 'path',
+	},
+	{
+		title: 'Scrub the story',
+		copy: 'After a calculation, use the timeline controls and Semantic Story panel to replay the animation and understand the result.',
+		preview: 'timeline',
 	},
 ];
+
+const formatWordList = (words) => {
+	if (words.length <= 1) return words.join('');
+	if (words.length === 2) return `${words[0]} and ${words[1]}`;
+	return `${words.slice(0, -1).join(', ')}, and ${words[words.length - 1]}`;
+};
+
+function InsightPanel({ insight }) {
+	if (!insight) return null;
+
+	return (
+		<aside className={`insight-panel ${insight.variant ? `insight-${insight.variant}` : ''}`} aria-label="Semantic insight">
+			<div className="insight-header">
+				<span>Semantic story</span>
+				<strong>{insight.title}</strong>
+			</div>
+			<p className="insight-summary">{insight.summary}</p>
+			<div className="insight-grid">
+				{insight.metrics.map((metric) => (
+					<div key={metric.label} className="insight-metric">
+						<span>{metric.label}</span>
+						<strong>{metric.value}</strong>
+					</div>
+				))}
+			</div>
+			{insight.sections.map((section) => (
+				<div className="insight-section" key={section.title}>
+					<span>{section.title}</span>
+					<p>{section.body}</p>
+				</div>
+			))}
+			<div className="insight-note">
+				<span>Model note</span>
+				<p>{insight.note}</p>
+			</div>
+		</aside>
+	);
+}
+
+function WordInspector({ embedding, neighbors, onClose, onUseWord, onSelectNeighbor }) {
+	if (!embedding) return null;
+
+	return (
+		<aside className="word-inspector" aria-label="Word inspector">
+			<div className="word-inspector-header">
+				<div>
+					<span>Word inspector</span>
+					<strong>{embedding.word}</strong>
+				</div>
+				<button type="button" onClick={onClose} aria-label="Close word inspector">X</button>
+			</div>
+			<div className="word-inspector-metrics">
+				<div>
+					<span>Index</span>
+					<strong>{embedding.id.toLocaleString()}</strong>
+				</div>
+				<div>
+					<span>Visible</span>
+					<strong>{embedding.reducedVector ? 'Yes' : 'No'}</strong>
+				</div>
+			</div>
+			<div className="word-action-grid">
+				<button type="button" onClick={() => onUseWord('compare-left', embedding.word)}>Compare A</button>
+				<button type="button" onClick={() => onUseWord('compare-right', embedding.word)}>Compare B</button>
+				<button type="button" onClick={() => onUseWord('path-start', embedding.word)}>Path start</button>
+				<button type="button" onClick={() => onUseWord('path-end', embedding.word)}>Path end</button>
+				<button type="button" onClick={() => onUseWord('analogy-left', embedding.word)}>+ first</button>
+				<button type="button" onClick={() => onUseWord('analogy-subtract', embedding.word)}>- subtract</button>
+				<button type="button" onClick={() => onUseWord('analogy-right', embedding.word)}>+ second</button>
+			</div>
+			<div className="word-neighbors">
+				<span>Nearest words</span>
+				{neighbors.length > 0 ? (
+					<ol>
+						{neighbors.map((neighbor) => (
+							<li key={neighbor.id}>
+								<button type="button" onClick={() => onSelectNeighbor(neighbor)}>
+									<strong>{neighbor.word}</strong>
+									<small>{neighbor.score.toFixed(3)}</small>
+								</button>
+							</li>
+						))}
+					</ol>
+				) : (
+					<p>No neighbors available yet.</p>
+				)}
+			</div>
+		</aside>
+	);
+}
 
 function TutorialPreview({ type }) {
 	if (type === 'visible') {
@@ -168,6 +278,76 @@ function TutorialPreview({ type }) {
 					<i />
 				</div>
 				<div className="preview-result">queen</div>
+			</div>
+		);
+	}
+
+	if (type === 'presets') {
+		return (
+			<div className="tutorial-preview tutorial-preview-presets" aria-label="Preset examples screenshot">
+				<div className="preview-mode-tabs">
+					<span className="is-active">Arithmetic</span>
+					<span>Compare</span>
+					<span>Path</span>
+				</div>
+				<div className="preview-preset-grid">
+					<span>royalty</span>
+					<span>pronouns</span>
+					<span>geography</span>
+					<span>tempo</span>
+				</div>
+			</div>
+		);
+	}
+
+	if (type === 'compare') {
+		return (
+			<div className="tutorial-preview tutorial-preview-compare" aria-label="Compare words screenshot">
+				<div className="preview-compare-words">
+					<span>king</span>
+					<b>69%</b>
+					<span>queen</span>
+				</div>
+				<div className="preview-venn">
+					<i />
+					<i />
+					<strong>royal</strong>
+				</div>
+			</div>
+		);
+	}
+
+	if (type === 'path') {
+		return (
+			<div className="tutorial-preview tutorial-preview-path" aria-label="Semantic path screenshot">
+				<div className="preview-path-line">
+					<span>music</span>
+					<i />
+					<i />
+					<strong>art</strong>
+				</div>
+				<div className="preview-path-labels">
+					<span>song</span>
+					<span>design</span>
+				</div>
+			</div>
+		);
+	}
+
+	if (type === 'timeline') {
+		return (
+			<div className="tutorial-preview tutorial-preview-timeline" aria-label="Timeline and semantic story screenshot">
+				<div className="preview-timeline-card">
+					<span>Semantic story</span>
+					<strong>king - man + woman</strong>
+					<p>Nearest landing point: queen</p>
+				</div>
+				<div className="preview-scrubber">
+					<i />
+					<i />
+					<i className="is-active" />
+					<i />
+				</div>
 			</div>
 		);
 	}
@@ -545,6 +725,17 @@ function EmbeddingViewer() {
 	const revealedPathExpression = revealedSemanticPath.length > 0
 		? revealedSemanticPath.map((embedding) => embedding.word).join(' -> ')
 		: `${pathStartMatch?.word || pathStart || '?'} -> ${pathEndMatch?.word || pathEnd || '?'}`;
+	const inspectorEmbedding = selectedEmbedding || searchMatch;
+	const inspectorNeighbors = useMemo(() => {
+		return findNearestNeighbors({
+			embedding: inspectorEmbedding,
+			embeddings,
+			vectorValues,
+			vectorDimensions,
+			vectorNorms,
+			limit: 6,
+		});
+	}, [embeddings, inspectorEmbedding, vectorDimensions, vectorNorms, vectorValues]);
 	const isPathRevealDone = Boolean(calculatedPath && semanticPath.length > 1 && pathRevealStep >= semanticPath.length);
 	const arithmeticTimelineSteps = useMemo(() => {
 		if (!analogyResult || !analogyLeftMatch || !analogySubtractMatch || !analogyRightMatch) return [];
@@ -639,6 +830,129 @@ function EmbeddingViewer() {
 
 		return `${semanticPath[0].word} reaches ${semanticPath[semanticPath.length - 1].word} through ${bridges.join(', ')}, chosen from words nearest to points along the vector between them.`;
 	}, [semanticPath]);
+	const activeInsight = useMemo(() => {
+		if (
+			activeMode === 'arithmetic'
+			&& analogyResult
+			&& analogyLeftMatch
+			&& analogySubtractMatch
+			&& analogyRightMatch
+		) {
+			const alternatives = similarCandidates.map((candidate) => candidate.word);
+			const evidenceWords = [analogyResult.word, ...alternatives.slice(0, 3)];
+			const score = `${(analogyResult.score * 100).toFixed(1)}%`;
+
+			return {
+				variant: 'arithmetic',
+				title: `${analogyLeftMatch.word} - ${analogySubtractMatch.word} + ${analogyRightMatch.word}`,
+				summary: `This applies the direction from ${analogySubtractMatch.word} to ${analogyRightMatch.word} onto ${analogyLeftMatch.word}. The nearest landing point is ${analogyResult.word}.`,
+				metrics: [
+					{ label: 'Result', value: analogyResult.word },
+					{ label: 'Match', value: score },
+				],
+				sections: [
+					{
+						title: 'What changed',
+						body: `${analogySubtractMatch.word} is subtracted away from ${analogyLeftMatch.word}, then ${analogyRightMatch.word} is added back in. The resulting vector moves toward ${analogyResult.word}.`,
+					},
+					{
+						title: 'Evidence nearby',
+						body: evidenceWords.length > 1
+							? `${formatWordList(evidenceWords)} sit close to the target, which gives the result its semantic support.`
+							: `${analogyResult.word} is the closest available word to the target vector.`,
+					},
+				],
+				note: 'Embeddings reflect patterns in the training text, so strong-looking relationships can also encode cultural bias, frequency effects, or dataset quirks.',
+			};
+		}
+
+		if (activeMode === 'compare' && calculatedCompare && compareLeftMatch && compareRightMatch) {
+			const sharedWords = compareSharedNeighbors.map((neighbor) => neighbor.word);
+			const leftWords = compareUniqueLeftNeighbors.map((neighbor) => neighbor.word);
+			const rightWords = compareUniqueRightNeighbors.map((neighbor) => neighbor.word);
+			const score = `${(Math.max(0, compareScore) * 100).toFixed(1)}%`;
+
+			return {
+				variant: 'compare',
+				title: `${compareLeftMatch.word} -> ${compareRightMatch.word}`,
+				summary: `${compareLeftMatch.word} and ${compareRightMatch.word} are ${score} similar by cosine distance, but their local neighborhoods reveal where the meanings separate.`,
+				metrics: [
+					{ label: 'Similarity', value: score },
+					{ label: 'Shared', value: `${sharedWords.length}` },
+				],
+				sections: [
+					{
+						title: 'Shared neighborhood',
+						body: sharedWords.length > 0
+							? `Both words sit near ${formatWordList(sharedWords)}, which anchors their common semantic territory.`
+							: 'Their strongest nearest-neighbor lists do not overlap in the visible top results.',
+					},
+					{
+						title: `${compareLeftMatch.word} leans toward`,
+						body: leftWords.length > 0
+							? formatWordList(leftWords)
+							: 'No unique left-side neighbors are available in the current result set.',
+					},
+					{
+						title: `${compareRightMatch.word} leans toward`,
+						body: rightWords.length > 0
+							? formatWordList(rightWords)
+							: 'No unique right-side neighbors are available in the current result set.',
+					},
+				],
+				note: 'Similarity is geometric, not explanatory by itself. The neighbor lists are evidence, but not a definitive definition of either word.',
+			};
+		}
+
+		if (activeMode === 'path' && calculatedPath && semanticPath.length > 1) {
+			const start = semanticPath[0];
+			const end = semanticPath[semanticPath.length - 1];
+			const bridges = semanticPath.slice(1, -1).map((embedding) => embedding.word);
+			const revealedWords = revealedSemanticPath.map((embedding) => embedding.word);
+
+			return {
+				variant: 'path',
+				title: `${start.word} -> ${end.word}`,
+				summary: `${start.word} reaches ${end.word} through ${bridges.length > 0 ? formatWordList(bridges) : 'a direct semantic jump'}.`,
+				metrics: [
+					{ label: 'Steps', value: `${semanticPath.length - 1}` },
+					{ label: 'Visible', value: `${revealedSemanticPath.length}/${semanticPath.length}` },
+				],
+				sections: [
+					{
+						title: 'Current route',
+						body: revealedWords.length > 0
+							? revealedWords.join(' -> ')
+							: `${start.word}`,
+					},
+					{
+						title: 'How bridges are chosen',
+						body: 'Each bridge is the nearest word to a point sampled between the start and end vectors, creating a readable semantic route through the space.',
+					},
+				],
+				note: 'A path is one plausible route through the geometry, not the only route. Different bridge counts or vocabularies can produce different stories.',
+			};
+		}
+
+		return null;
+	}, [
+		activeMode,
+		analogyLeftMatch,
+		analogyResult,
+		analogyRightMatch,
+		analogySubtractMatch,
+		calculatedCompare,
+		calculatedPath,
+		compareLeftMatch,
+		compareRightMatch,
+		compareScore,
+		compareSharedNeighbors,
+		compareUniqueLeftNeighbors,
+		compareUniqueRightNeighbors,
+		revealedSemanticPath,
+		semanticPath,
+		similarCandidates,
+	]);
 	const handleTutorialClose = useCallback(() => {
 		setIsTutorialOpen(false);
 	}, []);
@@ -807,6 +1121,48 @@ function EmbeddingViewer() {
 			setPathRevealStep(1);
 		}
 		setPresentationRunId((currentRunId) => currentRunId + 1);
+	};
+
+	const handleUseInspectedWord = (target, word) => {
+		if (target.startsWith('compare')) {
+			setActiveMode('compare');
+			if (target === 'compare-left') {
+				setCompareLeft(word);
+			} else {
+				setCompareRight(word);
+			}
+			return;
+		}
+
+		if (target.startsWith('path')) {
+			setActiveMode('path');
+			if (target === 'path-start') {
+				setPathStart(word);
+			} else {
+				setPathEnd(word);
+			}
+			return;
+		}
+
+		setActiveMode('arithmetic');
+		if (target === 'analogy-left') {
+			setAnalogyLeft(word);
+		} else if (target === 'analogy-subtract') {
+			setAnalogySubtract(word);
+		} else {
+			setAnalogyRight(word);
+		}
+	};
+
+	const handleSelectInspectorNeighbor = (neighbor) => {
+		setSelectedEmbedding(neighbor);
+		setSearchTerm(neighbor.word);
+		if (neighbor.id >= pointCount) {
+			setPointCount(Math.min(
+				embeddings.length,
+				Math.ceil((neighbor.id + 1) / 500) * 500,
+			));
+		}
 	};
 
 	const presentAnalogy = (leftMatch, subtractMatch, rightMatch) => {
@@ -1028,6 +1384,8 @@ function EmbeddingViewer() {
 					<strong>{semanticPath.length - 1} steps</strong>
 				</div>
 			)}
+
+			<InsightPanel insight={activeInsight} />
 
 			{!showLoader && (
 				<a.div
