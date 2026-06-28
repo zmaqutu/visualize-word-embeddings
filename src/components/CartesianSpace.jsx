@@ -10,6 +10,7 @@ const SELECTED_COLOR = new THREE.Color('#fb7185');
 const SEARCH_COLOR = new THREE.Color('#a7f3d0');
 const ANALOGY_INPUT_COLOR = new THREE.Color('#38bdf8');
 const ANALOGY_RESULT_COLOR = new THREE.Color('#34d399');
+const ANALOGY_CANDIDATE_COLOR = new THREE.Color('#c084fc');
 const DIM_COLOR = new THREE.Color('#536170');
 
 const beamVertexShader = `
@@ -61,7 +62,7 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }
 			start,
 			end,
 			headPosition: start.clone().lerp(end, 0.9),
-			headLength: Math.max(6, Math.min(16, length * 0.16)),
+			headLength: Math.max(4.2, Math.min(8.5, length * 0.08)),
 			beamLength: Math.max(1, length * 0.82),
 		};
 	}, [from, to]);
@@ -131,7 +132,7 @@ function AnimatedBeam({ from, to, color, label, variant = 'analogy', delay = 0 }
 			</group>
 			<group position={arrowParts.headPosition} quaternion={arrowParts.quaternion}>
 				<mesh position={[0, arrowParts.headLength / 2, 0]}>
-					<coneGeometry args={[variant === 'analogy' ? 4.6 : 3.8, arrowParts.headLength, 32]} />
+					<coneGeometry args={[variant === 'analogy' ? 2.6 : 2.1, arrowParts.headLength, 3]} />
 					<meshBasicMaterial color={color} transparent opacity={0.96} />
 				</mesh>
 			</group>
@@ -162,6 +163,7 @@ function CartesianSpace({
 	analogyInputIds,
 	analogyResultId,
 	analogyLinks,
+	visibleCandidateIds = [],
 	analogyRevealStep = 0,
 	analogyPresentationDone = false,
 	presentationRunId = 0,
@@ -190,14 +192,26 @@ function CartesianSpace({
 		return new Set(analogyInputIds);
 	}, [analogyInputIds]);
 
+	const visibleCandidateIdSet = useMemo(() => {
+		return new Set(visibleCandidateIds);
+	}, [visibleCandidateIds]);
+
 	const isAnalogyFocusMode = Number.isInteger(analogyResultId);
 	const focusProgressRef = useRef(0);
 
 	const renderedEmbeddings = useMemo(() => {
 		if (!isAnalogyFocusMode || !analogyPresentationDone) return visibleEmbeddings;
 
-		return visibleEmbeddings.filter((embedding) => analogyIdSet.has(embedding.id));
-	}, [analogyIdSet, analogyPresentationDone, isAnalogyFocusMode, visibleEmbeddings]);
+		return visibleEmbeddings.filter((embedding) => (
+			analogyIdSet.has(embedding.id) || visibleCandidateIdSet.has(embedding.id)
+		));
+	}, [
+		analogyIdSet,
+		analogyPresentationDone,
+		isAnalogyFocusMode,
+		visibleCandidateIdSet,
+		visibleEmbeddings,
+	]);
 
 	const geometry = useMemo(() => new THREE.SphereGeometry(0.72, 12, 12), []);
 	const material = useMemo(() => new THREE.MeshStandardMaterial({
@@ -250,11 +264,13 @@ function CartesianSpace({
 			const embeddingId = renderedEmbeddings[index].id;
 			const isAnalogyInput = analogyInputIdSet.has(embeddingId);
 			const isAnalogyResult = embeddingId === analogyResultId;
+			const isVisibleCandidate = visibleCandidateIdSet.has(embeddingId);
 			const isActive = embeddingId === selectedId
 				|| embeddingId === hoveredId
 				|| embeddingId === searchId
 				|| isAnalogyInput
-				|| isAnalogyResult;
+				|| isAnalogyResult
+				|| isVisibleCandidate;
 			const color = embeddingId === selectedId
 				? SELECTED_COLOR
 				: embeddingId === hoveredId
@@ -265,17 +281,19 @@ function CartesianSpace({
 							? ANALOGY_RESULT_COLOR
 							: isAnalogyInput
 								? ANALOGY_INPUT_COLOR
-								: (selectedId !== null && selectedId !== undefined)
-									|| (searchId !== null && searchId !== undefined)
-									|| analogyIdSet.size > 0
-									? DIM_COLOR
-									: BASE_COLOR;
+								: isVisibleCandidate
+									? ANALOGY_CANDIDATE_COLOR
+									: (selectedId !== null && selectedId !== undefined)
+										|| (searchId !== null && searchId !== undefined)
+										|| analogyIdSet.size > 0
+										? DIM_COLOR
+										: BASE_COLOR;
 
 			position.set(...renderedEmbeddings[index].reducedVector);
 			const inactiveFocusScale = isAnalogyFocusMode && !isActive
 				? THREE.MathUtils.lerp(1, 0.1, focusProgress)
 				: 1;
-			const baseScale = isAnalogyResult ? 3.15 : isAnalogyInput ? 2.35 : isActive ? 1.9 : 1;
+			const baseScale = isAnalogyResult ? 3.15 : isAnalogyInput ? 2.35 : isVisibleCandidate ? 1.85 : isActive ? 1.9 : 1;
 			const scale = baseScale * inactiveFocusScale * (isActive ? activeScaleBoost : 1);
 			colorScratch.copy(color).lerp(dimColor, isAnalogyFocusMode && !isActive ? focusProgress : 0);
 			matrix.compose(position, rotation, new THREE.Vector3(scale, scale, scale));
@@ -330,7 +348,7 @@ function CartesianSpace({
 
 		const revealedAnalogyIds = analogyIds.slice(0, Math.min(analogyRevealStep, analogyIds.length));
 
-		[...revealedAnalogyIds, searchId, selectedId, hoveredId].forEach((id) => {
+		[...revealedAnalogyIds, ...visibleCandidateIds, searchId, selectedId, hoveredId].forEach((id) => {
 			const embedding = visibleEmbeddingsById.get(id);
 			if (embedding) {
 				labelMap.set(embedding.id, embedding);
@@ -338,7 +356,15 @@ function CartesianSpace({
 		});
 
 		return Array.from(labelMap.values());
-	}, [analogyIds, analogyRevealStep, hoveredId, searchId, selectedId, visibleEmbeddingsById]);
+	}, [
+		analogyIds,
+		analogyRevealStep,
+		hoveredId,
+		searchId,
+		selectedId,
+		visibleCandidateIds,
+		visibleEmbeddingsById,
+	]);
 
 	const visibleAnalogyLinks = useMemo(() => {
 		const linkMap = new Map();
@@ -387,12 +413,12 @@ function CartesianSpace({
 					key={embedding.id}
 					position={[
 						embedding.reducedVector[0],
-						embedding.reducedVector[1] + (embedding.id === analogyResultId ? 22 : analogyInputIdSet.has(embedding.id) ? 16 : 8),
+						embedding.reducedVector[1] + (embedding.id === analogyResultId ? 22 : analogyInputIdSet.has(embedding.id) ? 16 : visibleCandidateIdSet.has(embedding.id) ? 11 : 8),
 						embedding.reducedVector[2],
 					]}
 					center
 					zIndexRange={[100, 0]}
-					className={`word-label ${analogyInputIdSet.has(embedding.id) ? 'analogy-input-label' : ''} ${embedding.id === analogyResultId ? 'analogy-result-label' : ''}`}
+					className={`word-label ${analogyInputIdSet.has(embedding.id) ? 'analogy-input-label' : ''} ${embedding.id === analogyResultId ? 'analogy-result-label' : ''} ${visibleCandidateIdSet.has(embedding.id) ? 'analogy-candidate-label' : ''}`}
 				>
 					{embedding.word}
 				</Html>

@@ -41,6 +41,7 @@ function EmbeddingViewer() {
 	const [calculatedAnalogy, setCalculatedAnalogy] = useState(null);
 	const [presentationRunId, setPresentationRunId] = useState(0);
 	const [presentationStep, setPresentationStep] = useState(0);
+	const [visibleCandidateIds, setVisibleCandidateIds] = useState([]);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
 	const maxPointCount = Math.max(embeddings.length, DEFAULT_POINT_COUNT);
@@ -119,6 +120,9 @@ function EmbeddingViewer() {
 	const isPresentingAnalogy = Boolean(analogyResult && presentationStep < 5);
 	const isAnalogyPresentationDone = Boolean(analogyResult && presentationStep >= 5);
 	const shouldRevealAnalogyResult = Boolean(analogyResult && presentationStep >= 4);
+	const similarCandidates = useMemo(() => {
+		return analogyResults.slice(1, 5);
+	}, [analogyResults]);
 	const analogyInputIds = useMemo(() => {
 		return [analogyLeftMatch?.id, analogySubtractMatch?.id, analogyRightMatch?.id].filter(Number.isInteger);
 	}, [analogyLeftMatch, analogyRightMatch, analogySubtractMatch]);
@@ -215,14 +219,16 @@ function EmbeddingViewer() {
 
 	useEffect(() => {
 		const maxActiveId = Math.max(...analogyIds, -1);
-		if (maxActiveId < pointCount) return;
+		const maxCandidateId = Math.max(...visibleCandidateIds, -1);
+		const maxNeededId = Math.max(maxActiveId, maxCandidateId);
+		if (maxNeededId < pointCount) return;
 
 		const nextCount = Math.min(
 			embeddings.length,
-			Math.ceil((maxActiveId + 1) / 500) * 500,
+			Math.ceil((maxNeededId + 1) / 500) * 500,
 		);
 		setPointCount(nextCount);
-	}, [analogyIds, embeddings.length, pointCount]);
+	}, [analogyIds, embeddings.length, pointCount, visibleCandidateIds]);
 
 	useEffect(() => {
 		if (!analogyResult) return undefined;
@@ -248,10 +254,19 @@ function EmbeddingViewer() {
 			subtract: draftAnalogySubtractMatch.word,
 			right: draftAnalogyRightMatch.word,
 		});
+		setVisibleCandidateIds([]);
 		setPresentationStep(0);
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
+	};
+
+	const handleCandidateToggle = (candidateId) => {
+		setVisibleCandidateIds((currentIds) => (
+			currentIds.includes(candidateId)
+				? currentIds.filter((id) => id !== candidateId)
+				: [...currentIds, candidateId]
+		));
 	};
 
 	const handleClear = () => {
@@ -259,6 +274,7 @@ function EmbeddingViewer() {
 		setAnalogySubtract('');
 		setAnalogyRight('');
 		setCalculatedAnalogy(null);
+		setVisibleCandidateIds([]);
 		setPresentationStep(0);
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setSearchTerm('');
@@ -295,6 +311,7 @@ function EmbeddingViewer() {
 					analogyInputIds={analogyInputIds}
 					analogyResultId={analogyResult?.id}
 					analogyLinks={analogyLinks}
+					visibleCandidateIds={visibleCandidateIds}
 					analogyRevealStep={presentationStep}
 					analogyPresentationDone={isAnalogyPresentationDone}
 					presentationRunId={presentationRunId}
@@ -381,9 +398,22 @@ function EmbeddingViewer() {
 					</div>
 					{isAnalogyPresentationDone && analogyResults.length > 0 && (
 						<ol className="analogy-candidates">
-							{analogyResults.slice(0, 5).map((candidate) => (
+							<li className="is-answer" key={analogyResult.id}>
+								<span>{analogyResult.word}</span>
+								<small>{analogyResult.score.toFixed(3)}</small>
+							</li>
+							{similarCandidates.map((candidate) => (
 								<li key={candidate.id}>
-									<span>{candidate.word}</span>
+									<button
+										className="candidate-switch"
+										type="button"
+										role="switch"
+										aria-checked={visibleCandidateIds.includes(candidate.id)}
+										onClick={() => handleCandidateToggle(candidate.id)}
+									>
+										<span className="candidate-switch-track" aria-hidden="true" />
+										<strong>{candidate.word}</strong>
+									</button>
 									<small>{candidate.score.toFixed(3)}</small>
 								</li>
 							))}

@@ -316,6 +316,7 @@ input {
 .analogy-candidates li {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 10px;
   padding: 6px 8px;
   border-radius: 5px;
@@ -325,8 +326,75 @@ input {
   font-weight: 800;
 }
 
+.analogy-candidates li.is-answer {
+  color: #f0fdf4;
+  background: rgba(52, 211, 153, 0.18);
+}
+
 .analogy-candidates small {
   color: #95b8aa;
+}
+
+.candidate-switch {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.candidate-switch-track {
+  position: relative;
+  width: 26px;
+  height: 15px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(177, 199, 218, 0.26);
+  border-radius: 999px;
+  background: rgba(7, 13, 18, 0.72);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.candidate-switch-track::after {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #6b7b8a;
+  content: "";
+  transition:
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.candidate-switch[aria-checked="true"] .candidate-switch-track {
+  border-color: rgba(192, 132, 252, 0.74);
+  background: rgba(88, 28, 135, 0.48);
+}
+
+.candidate-switch[aria-checked="true"] .candidate-switch-track::after {
+  background: #d8b4fe;
+  transform: translateX(11px);
+}
+
+.candidate-switch:focus-visible .candidate-switch-track {
+  box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.18);
+}
+
+.candidate-switch strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #d1fae5;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .focus-readout small {
@@ -371,6 +439,15 @@ input {
     0 0 34px rgba(52, 211, 153, 0.28),
     0 18px 54px rgba(0, 0, 0, 0.5);
   font-size: 18px;
+}
+
+.analogy-candidate-label {
+  border-color: rgba(216, 180, 254, 0.76);
+  color: #f5e8ff;
+  background: rgba(59, 28, 86, 0.9);
+  box-shadow:
+    0 0 0 3px rgba(192, 132, 252, 0.13),
+    0 14px 42px rgba(0, 0, 0, 0.42);
 }
 
 .arrow-label {
