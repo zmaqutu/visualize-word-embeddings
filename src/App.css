@@ -130,7 +130,7 @@ input {
   background: rgba(118, 228, 247, 0.08);
 }
 
-.insight-panel {
+.semantic-rail {
   position: absolute;
   top: 116px;
   right: 24px;
@@ -140,6 +140,12 @@ input {
   width: min(380px, calc(100vw - 430px));
   max-height: calc(100vh - 164px);
   overflow-y: auto;
+}
+
+.insight-panel,
+.word-inspector {
+  display: grid;
+  gap: 12px;
   padding: 16px;
   border: 1px solid rgba(177, 199, 218, 0.18);
   border-radius: 8px;
@@ -148,6 +154,10 @@ input {
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(18px);
   animation: stage-rise 360ms ease both;
+}
+
+.word-inspector {
+  border-color: rgba(118, 228, 247, 0.2);
 }
 
 .insight-arithmetic {
@@ -249,6 +259,149 @@ input {
 .insight-note p {
   color: #aebfd0;
   font-size: 0.78rem;
+}
+
+.word-inspector-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.word-inspector-header div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.word-inspector-header span,
+.word-inspector-metrics span,
+.word-neighbors > span {
+  color: #9fb4c9;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.word-inspector-header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 1.35rem;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-inspector-header button {
+  display: grid;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(177, 199, 218, 0.22);
+  border-radius: 6px;
+  color: #dbe7f2;
+  background: rgba(7, 13, 18, 0.58);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.word-inspector-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.word-inspector-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(118, 228, 247, 0.12);
+  border-radius: 6px;
+  background: rgba(7, 13, 18, 0.36);
+}
+
+.word-inspector-metrics strong {
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.word-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.word-action-grid button,
+.word-neighbors button {
+  min-width: 0;
+  border: 1px solid rgba(118, 228, 247, 0.14);
+  border-radius: 6px;
+  color: #dbe7f2;
+  background: rgba(7, 13, 18, 0.44);
+  cursor: pointer;
+  font-weight: 900;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.word-action-grid button {
+  padding: 9px 8px;
+  font-size: 0.76rem;
+}
+
+.word-action-grid button:hover,
+.word-neighbors button:hover {
+  border-color: rgba(118, 228, 247, 0.38);
+  color: #ffffff;
+  background: rgba(14, 116, 144, 0.24);
+  transform: translateY(-1px);
+}
+
+.word-neighbors {
+  display: grid;
+  gap: 8px;
+}
+
+.word-neighbors ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.word-neighbors button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+}
+
+.word-neighbors strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-neighbors small {
+  color: #9fb4c9;
+  font-size: 0.76rem;
+}
+
+.word-neighbors p {
+  margin: 0;
+  color: #aebfd0;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .tutorial-backdrop {
@@ -1873,7 +2026,7 @@ input {
 }
 
 @media (max-width: 1120px) {
-  .insight-panel {
+  .semantic-rail {
     left: auto;
     right: 24px;
     top: auto;
@@ -1896,7 +2049,7 @@ input {
     display: none;
   }
 
-  .insight-panel {
+  .semantic-rail {
     left: 12px;
     right: 12px;
     bottom: 12px;
@@ -1906,6 +2059,11 @@ input {
   }
 
   .insight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .word-action-grid,
+  .word-inspector-metrics {
     grid-template-columns: 1fr;
   }
 

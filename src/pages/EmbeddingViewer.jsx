@@ -103,7 +103,7 @@ const TUTORIAL_SLIDES = [
 	},
 	{
 		title: 'Hover and select',
-		copy: 'Move over a point to preview its label, then click to keep a word pinned while you inspect nearby terms.',
+		copy: 'Move over a point to preview its label, then click to open the Word Inspector with neighbors and shortcuts into each tool.',
 		preview: 'hover',
 	},
 	{
@@ -1385,7 +1385,21 @@ function EmbeddingViewer() {
 				</div>
 			)}
 
-			<InsightPanel insight={activeInsight} />
+			{(activeInsight || inspectorEmbedding) && (
+				<div className="semantic-rail">
+					<InsightPanel insight={activeInsight} />
+					<WordInspector
+						embedding={inspectorEmbedding}
+						neighbors={inspectorNeighbors}
+						onClose={() => {
+							setSelectedEmbedding(null);
+							setSearchTerm('');
+						}}
+						onUseWord={handleUseInspectedWord}
+						onSelectNeighbor={handleSelectInspectorNeighbor}
+					/>
+				</div>
+			)}
 
 			{!showLoader && (
 				<a.div
