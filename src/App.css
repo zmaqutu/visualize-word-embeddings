@@ -24,6 +24,59 @@ input {
   font: inherit;
 }
 
+.viewport-blocker {
+  display: grid;
+  width: 100%;
+  min-height: 100%;
+  place-items: center;
+  padding: 24px;
+  color: #eef5fb;
+  background:
+    linear-gradient(rgba(67, 81, 95, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(67, 81, 95, 0.14) 1px, transparent 1px),
+    #101820;
+  background-size: 28px 28px;
+}
+
+.viewport-blocker section {
+  display: grid;
+  gap: 12px;
+  width: min(520px, 100%);
+  padding: 24px;
+  border: 1px solid rgba(177, 199, 218, 0.18);
+  border-radius: 8px;
+  background: rgba(13, 23, 32, 0.86);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+  text-align: left;
+}
+
+.viewport-blocker span {
+  color: #9bd8c4;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.viewport-blocker h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(2rem, 9vw, 3.4rem);
+  line-height: 0.98;
+}
+
+.viewport-blocker p {
+  margin: 0;
+  color: #c7d4df;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.viewport-blocker small {
+  color: #9fb4c9;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
 .viewer-shell {
   position: relative;
   width: 100%;
