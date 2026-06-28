@@ -11,6 +11,8 @@ const SEARCH_COLOR = new THREE.Color('#a7f3d0');
 const ANALOGY_INPUT_COLOR = new THREE.Color('#38bdf8');
 const ANALOGY_RESULT_COLOR = new THREE.Color('#34d399');
 const ANALOGY_CANDIDATE_COLOR = new THREE.Color('#c084fc');
+const COMPARE_WORD_COLOR = new THREE.Color('#fbbf24');
+const COMPARE_NEIGHBOR_COLOR = new THREE.Color('#76e4f7');
 const DIM_COLOR = new THREE.Color('#536170');
 
 const beamVertexShader = `
@@ -164,6 +166,9 @@ function CartesianSpace({
 	analogyResultId,
 	analogyLinks,
 	visibleCandidateIds = [],
+	compareWordIds = [],
+	compareNeighborIds = [],
+	compareLinks = [],
 	analogyRevealStep = 0,
 	analogyPresentationDone = false,
 	presentationRunId = 0,
@@ -196,10 +201,26 @@ function CartesianSpace({
 		return new Set(visibleCandidateIds);
 	}, [visibleCandidateIds]);
 
+	const compareWordIdSet = useMemo(() => {
+		return new Set(compareWordIds);
+	}, [compareWordIds]);
+
+	const compareNeighborIdSet = useMemo(() => {
+		return new Set(compareNeighborIds);
+	}, [compareNeighborIds]);
+
+	const isCompareFocusMode = compareWordIds.length > 0;
 	const isAnalogyFocusMode = Number.isInteger(analogyResultId);
+	const isFocusMode = isAnalogyFocusMode || isCompareFocusMode;
 	const focusProgressRef = useRef(0);
 
 	const renderedEmbeddings = useMemo(() => {
+		if (isCompareFocusMode) {
+			return visibleEmbeddings.filter((embedding) => (
+				compareWordIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id)
+			));
+		}
+
 		if (!isAnalogyFocusMode || !analogyPresentationDone) return visibleEmbeddings;
 
 		return visibleEmbeddings.filter((embedding) => (
@@ -208,6 +229,9 @@ function CartesianSpace({
 	}, [
 		analogyIdSet,
 		analogyPresentationDone,
+		compareNeighborIdSet,
+		compareWordIdSet,
+		isCompareFocusMode,
 		isAnalogyFocusMode,
 		visibleCandidateIdSet,
 		visibleEmbeddings,
@@ -244,7 +268,7 @@ function CartesianSpace({
 	useFrame((_, delta) => {
 		if (!wordEmbeddingsMesh) return;
 
-		const targetFocusProgress = isAnalogyFocusMode ? 1 : 0;
+		const targetFocusProgress = isFocusMode ? 1 : 0;
 		focusProgressRef.current = THREE.MathUtils.damp(
 			focusProgressRef.current,
 			targetFocusProgress,
@@ -265,12 +289,16 @@ function CartesianSpace({
 			const isAnalogyInput = analogyInputIdSet.has(embeddingId);
 			const isAnalogyResult = embeddingId === analogyResultId;
 			const isVisibleCandidate = visibleCandidateIdSet.has(embeddingId);
+			const isCompareWord = compareWordIdSet.has(embeddingId);
+			const isCompareNeighbor = compareNeighborIdSet.has(embeddingId);
 			const isActive = embeddingId === selectedId
 				|| embeddingId === hoveredId
 				|| embeddingId === searchId
 				|| isAnalogyInput
 				|| isAnalogyResult
-				|| isVisibleCandidate;
+				|| isVisibleCandidate
+				|| isCompareWord
+				|| isCompareNeighbor;
 			const color = embeddingId === selectedId
 				? SELECTED_COLOR
 				: embeddingId === hoveredId
@@ -283,19 +311,24 @@ function CartesianSpace({
 								? ANALOGY_INPUT_COLOR
 								: isVisibleCandidate
 									? ANALOGY_CANDIDATE_COLOR
-									: (selectedId !== null && selectedId !== undefined)
-										|| (searchId !== null && searchId !== undefined)
-										|| analogyIdSet.size > 0
-										? DIM_COLOR
-										: BASE_COLOR;
+									: isCompareWord
+										? COMPARE_WORD_COLOR
+										: isCompareNeighbor
+											? COMPARE_NEIGHBOR_COLOR
+											: (selectedId !== null && selectedId !== undefined)
+												|| (searchId !== null && searchId !== undefined)
+												|| analogyIdSet.size > 0
+												|| compareWordIdSet.size > 0
+												? DIM_COLOR
+												: BASE_COLOR;
 
 			position.set(...renderedEmbeddings[index].reducedVector);
-			const inactiveFocusScale = isAnalogyFocusMode && !isActive
+			const inactiveFocusScale = isFocusMode && !isActive
 				? THREE.MathUtils.lerp(1, 0.1, focusProgress)
 				: 1;
-			const baseScale = isAnalogyResult ? 3.15 : isAnalogyInput ? 2.35 : isVisibleCandidate ? 1.85 : isActive ? 1.9 : 1;
+			const baseScale = isAnalogyResult ? 3.15 : isCompareWord ? 2.65 : isAnalogyInput ? 2.35 : isVisibleCandidate || isCompareNeighbor ? 1.85 : isActive ? 1.9 : 1;
 			const scale = baseScale * inactiveFocusScale * (isActive ? activeScaleBoost : 1);
-			colorScratch.copy(color).lerp(dimColor, isAnalogyFocusMode && !isActive ? focusProgress : 0);
+			colorScratch.copy(color).lerp(dimColor, isFocusMode && !isActive ? focusProgress : 0);
 			matrix.compose(position, rotation, new THREE.Vector3(scale, scale, scale));
 			wordEmbeddingsMesh.setColorAt(index, colorScratch);
 			wordEmbeddingsMesh.setMatrixAt(index, matrix);
@@ -348,7 +381,15 @@ function CartesianSpace({
 
 		const revealedAnalogyIds = analogyIds.slice(0, Math.min(analogyRevealStep, analogyIds.length));
 
-		[...revealedAnalogyIds, ...visibleCandidateIds, searchId, selectedId, hoveredId].forEach((id) => {
+		[
+			...revealedAnalogyIds,
+			...visibleCandidateIds,
+			...compareWordIds,
+			...compareNeighborIds,
+			searchId,
+			selectedId,
+			hoveredId,
+		].forEach((id) => {
 			const embedding = visibleEmbeddingsById.get(id);
 			if (embedding) {
 				labelMap.set(embedding.id, embedding);
@@ -359,6 +400,8 @@ function CartesianSpace({
 	}, [
 		analogyIds,
 		analogyRevealStep,
+		compareNeighborIds,
+		compareWordIds,
 		hoveredId,
 		searchId,
 		selectedId,
@@ -381,6 +424,12 @@ function CartesianSpace({
 
 		return Array.from(linkMap.values());
 	}, [analogyLinks, analogyRevealStep]);
+
+	const visibleCompareLinks = useMemo(() => {
+		return compareLinks.filter(({ from, to }) => (
+			Array.isArray(from.reducedVector) && Array.isArray(to.reducedVector)
+		));
+	}, [compareLinks]);
 
 	return (
 		<>
@@ -408,17 +457,28 @@ function CartesianSpace({
 					delay={0}
 				/>
 			))}
+			{visibleCompareLinks.map(({ from, to, label, variant = 'compare' }) => (
+				<AnimatedBeam
+					key={`${presentationRunId}-${from.id}-${to.id}`}
+					from={from}
+					to={to}
+					color="#fbbf24"
+					label={label || `${from.word} -> ${to.word}`}
+					variant={variant}
+					delay={0}
+				/>
+			))}
 			{activeLabels.map((embedding) => (
 				<Html
 					key={embedding.id}
 					position={[
 						embedding.reducedVector[0],
-						embedding.reducedVector[1] + (embedding.id === analogyResultId ? 22 : analogyInputIdSet.has(embedding.id) ? 16 : visibleCandidateIdSet.has(embedding.id) ? 11 : 8),
+						embedding.reducedVector[1] + (embedding.id === analogyResultId ? 22 : compareWordIdSet.has(embedding.id) ? 17 : analogyInputIdSet.has(embedding.id) ? 16 : visibleCandidateIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id) ? 11 : 8),
 						embedding.reducedVector[2],
 					]}
 					center
 					zIndexRange={[100, 0]}
-					className={`word-label ${analogyInputIdSet.has(embedding.id) ? 'analogy-input-label' : ''} ${embedding.id === analogyResultId ? 'analogy-result-label' : ''} ${visibleCandidateIdSet.has(embedding.id) ? 'analogy-candidate-label' : ''}`}
+					className={`word-label ${analogyInputIdSet.has(embedding.id) ? 'analogy-input-label' : ''} ${embedding.id === analogyResultId ? 'analogy-result-label' : ''} ${visibleCandidateIdSet.has(embedding.id) ? 'analogy-candidate-label' : ''} ${compareWordIdSet.has(embedding.id) ? 'compare-word-label' : ''} ${compareNeighborIdSet.has(embedding.id) ? 'compare-neighbor-label' : ''}`}
 				>
 					{embedding.word}
 				</Html>

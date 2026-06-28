@@ -109,6 +109,60 @@ export const getVector = (embedding, vectorValues, vectorDimensions) => {
 	return vectorValues.slice(offset, offset + vectorDimensions);
 };
 
+export const cosineSimilarity = (leftEmbedding, rightEmbedding, vectorValues, vectorDimensions, vectorNorms) => {
+	if (!leftEmbedding || !rightEmbedding || !vectorValues || vectorDimensions === 0) return 0;
+
+	let dotProduct = 0;
+	const leftOffset = leftEmbedding.id * vectorDimensions;
+	const rightOffset = rightEmbedding.id * vectorDimensions;
+
+	for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+		dotProduct += vectorValues[leftOffset + dimension] * vectorValues[rightOffset + dimension];
+	}
+
+	return dotProduct / ((vectorNorms[leftEmbedding.id] || 1) * (vectorNorms[rightEmbedding.id] || 1));
+};
+
+export const findNearestNeighbors = ({
+	embedding,
+	embeddings,
+	vectorValues,
+	vectorDimensions,
+	vectorNorms,
+	limit = 12,
+	excludeIds = [],
+}) => {
+	if (!embedding || !vectorValues || vectorDimensions === 0) return [];
+
+	const excludedIds = new Set([embedding.id, ...excludeIds]);
+	const nearest = [];
+	const sourceOffset = embedding.id * vectorDimensions;
+
+	for (let index = 0; index < embeddings.length; index += 1) {
+		if (excludedIds.has(index)) continue;
+
+		let dotProduct = 0;
+		const targetOffset = index * vectorDimensions;
+
+		for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+			dotProduct += vectorValues[sourceOffset + dimension] * vectorValues[targetOffset + dimension];
+		}
+
+		const score = dotProduct / ((vectorNorms[embedding.id] || 1) * (vectorNorms[index] || 1));
+		const candidate = { ...embeddings[index], score };
+
+		if (nearest.length < limit) {
+			nearest.push(candidate);
+			nearest.sort((left, right) => right.score - left.score);
+		} else if (score > nearest[nearest.length - 1].score) {
+			nearest[nearest.length - 1] = candidate;
+			nearest.sort((left, right) => right.score - left.score);
+		}
+	}
+
+	return nearest;
+};
+
 export const solveAnalogy = ({
 	addLeft,
 	subtract,

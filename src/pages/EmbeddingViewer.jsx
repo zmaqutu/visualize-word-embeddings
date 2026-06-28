@@ -7,7 +7,9 @@ import { useSpring, a, to } from '@react-spring/web';
 import {
 	buildProjectionModel,
 	buildVectorNorms,
+	cosineSimilarity,
 	findExactWordMatch,
+	findNearestNeighbors,
 	findWordMatch,
 	getVector,
 	projectVector,
@@ -18,6 +20,8 @@ const DEFAULT_POINT_COUNT = 2500;
 const DEFAULT_ANALOGY_LEFT = 'king';
 const DEFAULT_ANALOGY_SUBTRACT = 'man';
 const DEFAULT_ANALOGY_RIGHT = 'woman';
+const DEFAULT_COMPARE_LEFT = 'king';
+const DEFAULT_COMPARE_RIGHT = 'queen';
 const ANALOGY_PRESETS = [
 	{
 		id: 'royalty',
@@ -174,13 +178,18 @@ function EmbeddingViewer() {
 	const [hoveredEmbedding, setHoveredEmbedding] = useState(null);
 	const [selectedEmbedding, setSelectedEmbedding] = useState(null);
 	const [searchTerm, setSearchTerm] = useState('');
+	const [activeMode, setActiveMode] = useState('arithmetic');
 	const [analogyLeft, setAnalogyLeft] = useState(DEFAULT_ANALOGY_LEFT);
 	const [analogySubtract, setAnalogySubtract] = useState(DEFAULT_ANALOGY_SUBTRACT);
 	const [analogyRight, setAnalogyRight] = useState(DEFAULT_ANALOGY_RIGHT);
 	const [calculatedAnalogy, setCalculatedAnalogy] = useState(null);
+	const [compareLeft, setCompareLeft] = useState(DEFAULT_COMPARE_LEFT);
+	const [compareRight, setCompareRight] = useState(DEFAULT_COMPARE_RIGHT);
+	const [calculatedCompare, setCalculatedCompare] = useState(null);
 	const [presentationRunId, setPresentationRunId] = useState(0);
 	const [presentationStep, setPresentationStep] = useState(0);
 	const [visibleCandidateIds, setVisibleCandidateIds] = useState([]);
+	const [visibleCompareNeighborIds, setVisibleCompareNeighborIds] = useState([]);
 	const [isTutorialOpen, setIsTutorialOpen] = useState(true);
 	const [tutorialSlide, setTutorialSlide] = useState(0);
 
@@ -209,6 +218,14 @@ function EmbeddingViewer() {
 		return findExactWordMatch(embeddings, analogyRight);
 	}, [analogyRight, embeddings]);
 
+	const draftCompareLeftMatch = useMemo(() => {
+		return findExactWordMatch(embeddings, compareLeft);
+	}, [compareLeft, embeddings]);
+
+	const draftCompareRightMatch = useMemo(() => {
+		return findExactWordMatch(embeddings, compareRight);
+	}, [compareRight, embeddings]);
+
 	const analogyPresets = useMemo(() => {
 		return ANALOGY_PRESETS.map((preset) => ({
 			...preset,
@@ -232,10 +249,26 @@ function EmbeddingViewer() {
 		return calculatedAnalogy ? findExactWordMatch(embeddings, calculatedAnalogy.right) : null;
 	}, [calculatedAnalogy, embeddings]);
 
+	const compareLeftMatch = useMemo(() => {
+		return calculatedCompare ? findExactWordMatch(embeddings, calculatedCompare.left) : null;
+	}, [calculatedCompare, embeddings]);
+
+	const compareRightMatch = useMemo(() => {
+		return calculatedCompare ? findExactWordMatch(embeddings, calculatedCompare.right) : null;
+	}, [calculatedCompare, embeddings]);
+
 	const canCalculateAnalogy = Boolean(
 		draftAnalogyLeftMatch
 		&& draftAnalogySubtractMatch
 		&& draftAnalogyRightMatch
+		&& vectorValues
+		&& vectorNorms.length > 0,
+	);
+
+	const canCompareWords = Boolean(
+		draftCompareLeftMatch
+		&& draftCompareRightMatch
+		&& draftCompareLeftMatch.id !== draftCompareRightMatch.id
 		&& vectorValues
 		&& vectorNorms.length > 0,
 	);
@@ -245,6 +278,12 @@ function EmbeddingViewer() {
 			calculatedAnalogy.left !== draftAnalogyLeftMatch?.word
 			|| calculatedAnalogy.subtract !== draftAnalogySubtractMatch?.word
 			|| calculatedAnalogy.right !== draftAnalogyRightMatch?.word
+		);
+
+	const hasPendingCompareChanges = calculatedCompare
+		&& (
+			calculatedCompare.left !== draftCompareLeftMatch?.word
+			|| calculatedCompare.right !== draftCompareRightMatch?.word
 		);
 
 	const analogyResults = useMemo(() => {
@@ -333,9 +372,74 @@ function EmbeddingViewer() {
 		vectorValues,
 	]);
 
+	const compareLeftNeighbors = useMemo(() => {
+		return findNearestNeighbors({
+			embedding: compareLeftMatch,
+			embeddings,
+			vectorValues,
+			vectorDimensions,
+			vectorNorms,
+			limit: 14,
+			excludeIds: [compareRightMatch?.id].filter(Number.isInteger),
+		});
+	}, [compareLeftMatch, compareRightMatch, embeddings, vectorDimensions, vectorNorms, vectorValues]);
+
+	const compareRightNeighbors = useMemo(() => {
+		return findNearestNeighbors({
+			embedding: compareRightMatch,
+			embeddings,
+			vectorValues,
+			vectorDimensions,
+			vectorNorms,
+			limit: 14,
+			excludeIds: [compareLeftMatch?.id].filter(Number.isInteger),
+		});
+	}, [compareLeftMatch, compareRightMatch, embeddings, vectorDimensions, vectorNorms, vectorValues]);
+
+	const compareSharedNeighbors = useMemo(() => {
+		const rightNeighborIds = new Set(compareRightNeighbors.map((neighbor) => neighbor.id));
+		return compareLeftNeighbors
+			.filter((neighbor) => rightNeighborIds.has(neighbor.id))
+			.slice(0, 4);
+	}, [compareLeftNeighbors, compareRightNeighbors]);
+
+	const compareUniqueLeftNeighbors = useMemo(() => {
+		const rightNeighborIds = new Set(compareRightNeighbors.map((neighbor) => neighbor.id));
+		return compareLeftNeighbors
+			.filter((neighbor) => !rightNeighborIds.has(neighbor.id))
+			.slice(0, 4);
+	}, [compareLeftNeighbors, compareRightNeighbors]);
+
+	const compareUniqueRightNeighbors = useMemo(() => {
+		const leftNeighborIds = new Set(compareLeftNeighbors.map((neighbor) => neighbor.id));
+		return compareRightNeighbors
+			.filter((neighbor) => !leftNeighborIds.has(neighbor.id))
+			.slice(0, 4);
+	}, [compareLeftNeighbors, compareRightNeighbors]);
+
+	const compareScore = useMemo(() => {
+		return cosineSimilarity(compareLeftMatch, compareRightMatch, vectorValues, vectorDimensions, vectorNorms);
+	}, [compareLeftMatch, compareRightMatch, vectorDimensions, vectorNorms, vectorValues]);
+
+	const compareWordIds = useMemo(() => {
+		return [compareLeftMatch?.id, compareRightMatch?.id].filter(Number.isInteger);
+	}, [compareLeftMatch, compareRightMatch]);
+
+	const compareLinks = useMemo(() => {
+		if (!compareLeftMatch || !compareRightMatch) return [];
+
+		return [{
+			from: compareLeftMatch,
+			to: compareRightMatch,
+			label: `${compareLeftMatch.word} -> ${compareRightMatch.word}`,
+			variant: 'compare',
+		}];
+	}, [compareLeftMatch, compareRightMatch]);
+
 	const focusedEmbedding = selectedEmbedding || searchMatch || hoveredEmbedding;
 	const arithmeticExpression = `${analogyLeftMatch?.word || analogyLeft || '?'} - ${analogySubtractMatch?.word || analogySubtract || '?'} + ${analogyRightMatch?.word || analogyRight || '?'}`;
 	const draftArithmeticExpression = `${draftAnalogyLeftMatch?.word || analogyLeft || '?'} - ${draftAnalogySubtractMatch?.word || analogySubtract || '?'} + ${draftAnalogyRightMatch?.word || analogyRight || '?'}`;
+	const compareExpression = `${compareLeftMatch?.word || compareLeft || '?'} -> ${compareRightMatch?.word || compareRight || '?'}`;
 	const activePresetId = useMemo(() => {
 		const normalizedExpression = [
 			draftAnalogyLeftMatch?.word || analogyLeft,
@@ -361,6 +465,18 @@ function EmbeddingViewer() {
 
 		return `The direction from ${analogySubtractMatch.word} to ${analogyRightMatch.word} is applied to ${analogyLeftMatch.word}. ${analogyResult.word} is the nearest word to that new vector.`;
 	}, [analogyLeftMatch, analogyResult, analogyRightMatch, analogySubtractMatch]);
+	const compareExplanation = useMemo(() => {
+		if (!compareLeftMatch || !compareRightMatch) return '';
+
+		const sharedWords = compareSharedNeighbors.map((neighbor) => neighbor.word).join(', ');
+		const similarityPercent = Math.max(0, compareScore * 100).toFixed(1);
+
+		if (sharedWords) {
+			return `${compareLeftMatch.word} and ${compareRightMatch.word} share ${sharedWords} in their nearby neighborhoods, with a ${similarityPercent}% cosine similarity.`;
+		}
+
+		return `${compareLeftMatch.word} and ${compareRightMatch.word} have a ${similarityPercent}% cosine similarity, but their closest visible neighborhoods separate quickly.`;
+	}, [compareLeftMatch, compareRightMatch, compareScore, compareSharedNeighbors]);
 	const handleTutorialClose = useCallback(() => {
 		setIsTutorialOpen(false);
 	}, []);
@@ -429,7 +545,9 @@ function EmbeddingViewer() {
 	useEffect(() => {
 		const maxActiveId = Math.max(...analogyIds, -1);
 		const maxCandidateId = Math.max(...visibleCandidateIds, -1);
-		const maxNeededId = Math.max(maxActiveId, maxCandidateId);
+		const maxCompareWordId = Math.max(...compareWordIds, -1);
+		const maxCompareNeighborId = Math.max(...visibleCompareNeighborIds, -1);
+		const maxNeededId = Math.max(maxActiveId, maxCandidateId, maxCompareWordId, maxCompareNeighborId);
 		if (maxNeededId < pointCount) return;
 
 		const nextCount = Math.min(
@@ -437,7 +555,14 @@ function EmbeddingViewer() {
 			Math.ceil((maxNeededId + 1) / 500) * 500,
 		);
 		setPointCount(nextCount);
-	}, [analogyIds, embeddings.length, pointCount, visibleCandidateIds]);
+	}, [
+		analogyIds,
+		compareWordIds,
+		embeddings.length,
+		pointCount,
+		visibleCandidateIds,
+		visibleCompareNeighborIds,
+	]);
 
 	useEffect(() => {
 		if (!analogyResult) return undefined;
@@ -469,6 +594,9 @@ function EmbeddingViewer() {
 	};
 
 	const presentAnalogy = (leftMatch, subtractMatch, rightMatch) => {
+		setActiveMode('arithmetic');
+		setCalculatedCompare(null);
+		setVisibleCompareNeighborIds([]);
 		setCalculatedAnalogy({
 			left: leftMatch.word,
 			subtract: subtractMatch.word,
@@ -515,12 +643,41 @@ function EmbeddingViewer() {
 		));
 	};
 
+	const handleCompareWords = () => {
+		if (!canCompareWords) return;
+
+		setActiveMode('compare');
+		setCalculatedCompare({
+			left: draftCompareLeftMatch.word,
+			right: draftCompareRightMatch.word,
+		});
+		setCalculatedAnalogy(null);
+		setVisibleCandidateIds([]);
+		setVisibleCompareNeighborIds([]);
+		setPresentationStep(0);
+		setPresentationRunId((currentRunId) => currentRunId + 1);
+		setHoveredEmbedding(null);
+		setSelectedEmbedding(null);
+	};
+
+	const handleCompareNeighborToggle = (neighborId) => {
+		setVisibleCompareNeighborIds((currentIds) => (
+			currentIds.includes(neighborId)
+				? currentIds.filter((id) => id !== neighborId)
+				: [...currentIds, neighborId]
+		));
+	};
+
 	const handleClear = () => {
 		setAnalogyLeft('');
 		setAnalogySubtract('');
 		setAnalogyRight('');
 		setCalculatedAnalogy(null);
+		setCompareLeft('');
+		setCompareRight('');
+		setCalculatedCompare(null);
 		setVisibleCandidateIds([]);
+		setVisibleCompareNeighborIds([]);
 		setPresentationStep(0);
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 		setSearchTerm('');
@@ -553,23 +710,33 @@ function EmbeddingViewer() {
 					hoveredId={hoveredEmbedding?.id}
 					selectedId={selectedEmbedding?.id}
 					searchId={searchMatch?.id}
-					analogyIds={analogyIds}
-					analogyInputIds={analogyInputIds}
-					analogyResultId={analogyResult?.id}
-					analogyLinks={analogyLinks}
-					visibleCandidateIds={visibleCandidateIds}
+					analogyIds={activeMode === 'arithmetic' ? analogyIds : []}
+					analogyInputIds={activeMode === 'arithmetic' ? analogyInputIds : []}
+					analogyResultId={activeMode === 'arithmetic' ? analogyResult?.id : undefined}
+					analogyLinks={activeMode === 'arithmetic' ? analogyLinks : []}
+					visibleCandidateIds={activeMode === 'arithmetic' ? visibleCandidateIds : []}
+					compareWordIds={activeMode === 'compare' ? compareWordIds : []}
+					compareNeighborIds={activeMode === 'compare' ? visibleCompareNeighborIds : []}
+					compareLinks={activeMode === 'compare' ? compareLinks : []}
 					analogyRevealStep={presentationStep}
-					analogyPresentationDone={isAnalogyPresentationDone}
+					analogyPresentationDone={activeMode === 'arithmetic' && isAnalogyPresentationDone}
 					presentationRunId={presentationRunId}
 					onHover={setHoveredEmbedding}
 					onSelect={setSelectedEmbedding}
 				/>
 			</Canvas>
 
-			{shouldRevealAnalogyResult && (
+			{activeMode === 'arithmetic' && shouldRevealAnalogyResult && (
 				<div className="analogy-stage-readout" aria-live="polite">
 					<span>{arithmeticExpression}</span>
 					<strong>{analogyResult.word}</strong>
+				</div>
+			)}
+
+			{activeMode === 'compare' && calculatedCompare && compareLeftMatch && compareRightMatch && (
+				<div className="analogy-stage-readout compare-stage-readout" aria-live="polite">
+					<span>{compareExpression}</span>
+					<strong>{(Math.max(0, compareScore) * 100).toFixed(1)}%</strong>
 				</div>
 			)}
 
@@ -671,117 +838,267 @@ function EmbeddingViewer() {
 				</div>
 
 				<div className="analogy-card">
-					<span>Vector arithmetic</span>
-					<div className="analogy-controls">
-						<input
-							type="search"
-							value={analogyLeft}
-							onChange={(event) => setAnalogyLeft(event.target.value)}
-							placeholder="king"
-							autoComplete="off"
-							aria-label="First added word"
-						/>
-						<b>-</b>
-						<input
-							type="search"
-							value={analogySubtract}
-							onChange={(event) => setAnalogySubtract(event.target.value)}
-							placeholder="man"
-							autoComplete="off"
-							aria-label="Subtracted word"
-						/>
-						<b>+</b>
-						<input
-							type="search"
-							value={analogyRight}
-							onChange={(event) => setAnalogyRight(event.target.value)}
-							placeholder="woman"
-							autoComplete="off"
-							aria-label="Second added word"
-						/>
+					<div className="mode-tabs" role="tablist" aria-label="Relationship tools">
+						<button
+							className={activeMode === 'arithmetic' ? 'is-active' : ''}
+							type="button"
+							role="tab"
+							aria-selected={activeMode === 'arithmetic'}
+							onClick={() => setActiveMode('arithmetic')}
+						>
+							Arithmetic
+						</button>
+						<button
+							className={activeMode === 'compare' ? 'is-active' : ''}
+							type="button"
+							role="tab"
+							aria-selected={activeMode === 'compare'}
+							onClick={() => setActiveMode('compare')}
+						>
+							Compare
+						</button>
 					</div>
-					<div className="analogy-validation" aria-live="polite">
-						<small className={draftAnalogyLeftMatch ? 'is-valid' : 'is-missing'}>{draftAnalogyLeftMatch ? draftAnalogyLeftMatch.word : 'First word not found'}</small>
-						<small className={draftAnalogySubtractMatch ? 'is-valid' : 'is-missing'}>{draftAnalogySubtractMatch ? draftAnalogySubtractMatch.word : 'Subtract word not found'}</small>
-						<small className={draftAnalogyRightMatch ? 'is-valid' : 'is-missing'}>{draftAnalogyRightMatch ? draftAnalogyRightMatch.word : 'Second word not found'}</small>
-					</div>
-					<div className="preset-drawer">
-						<span>Relationship presets</span>
-						<div className="preset-grid">
-							{analogyPresets.map((preset) => (
-								<button
-									key={preset.id}
-									className={activePresetId === preset.id ? 'is-active' : ''}
-									type="button"
-									onClick={() => handlePresetSelect(preset)}
-									disabled={!preset.isAvailable || isPresentingAnalogy}
-									title={`${preset.left} - ${preset.subtract} + ${preset.right}`}
-								>
-									<strong>{preset.label}</strong>
-									<small>
-										{preset.left}
-										{' - '}
-										{preset.subtract}
-										{' + '}
-										{preset.right}
-									</small>
-								</button>
-							))}
-						</div>
-					</div>
-					<button
-						className="calculate-button"
-						type="button"
-						onClick={handleCalculateAnalogy}
-						disabled={!canCalculateAnalogy || isPresentingAnalogy}
-					>
-						{isPresentingAnalogy ? 'Drawing...' : hasPendingAnalogyChanges ? 'Recalculate' : 'Calculate'}
-					</button>
-					<button
-						className="clear-button"
-						type="button"
-						onClick={handleClear}
-					>
-						Clear
-					</button>
-					<div className="analogy-result">
-						<small>{analogyResult ? arithmeticExpression : draftArithmeticExpression}</small>
-						<strong>{shouldRevealAnalogyResult ? analogyResult.word : analogyResult ? 'Drawing calculation...' : 'Ready when you calculate'}</strong>
-						{shouldRevealAnalogyResult && (
-							<em>{(analogyResult.score * 100).toFixed(1)}% cosine match</em>
-						)}
-						{hasPendingAnalogyChanges && (
-							<em>Inputs changed. Calculate to update the scene.</em>
-						)}
-					</div>
-					{shouldRevealAnalogyResult && analogyExplanation && (
-						<div className="analogy-explanation">
-							<span>Explain mode</span>
-							<p>{analogyExplanation}</p>
-						</div>
-					)}
-					{isAnalogyPresentationDone && analogyResults.length > 0 && (
-						<ol className="analogy-candidates">
-							<li className="is-answer" key={analogyResult.id}>
-								<span>{analogyResult.word}</span>
-								<small>{analogyResult.score.toFixed(3)}</small>
-							</li>
-							{similarCandidates.map((candidate) => (
-								<li key={candidate.id}>
-									<button
-										className="candidate-switch"
-										type="button"
-										role="switch"
-										aria-checked={visibleCandidateIds.includes(candidate.id)}
-										onClick={() => handleCandidateToggle(candidate.id)}
-									>
-										<span className="candidate-switch-track" aria-hidden="true" />
-										<strong>{candidate.word}</strong>
-									</button>
-									<small>{candidate.score.toFixed(3)}</small>
-								</li>
-							))}
-						</ol>
+
+					{activeMode === 'arithmetic' ? (
+						<>
+							<span>Vector arithmetic</span>
+							<div className="analogy-controls">
+								<input
+									type="search"
+									value={analogyLeft}
+									onChange={(event) => setAnalogyLeft(event.target.value)}
+									placeholder="king"
+									autoComplete="off"
+									aria-label="First added word"
+								/>
+								<b>-</b>
+								<input
+									type="search"
+									value={analogySubtract}
+									onChange={(event) => setAnalogySubtract(event.target.value)}
+									placeholder="man"
+									autoComplete="off"
+									aria-label="Subtracted word"
+								/>
+								<b>+</b>
+								<input
+									type="search"
+									value={analogyRight}
+									onChange={(event) => setAnalogyRight(event.target.value)}
+									placeholder="woman"
+									autoComplete="off"
+									aria-label="Second added word"
+								/>
+							</div>
+							<div className="analogy-validation" aria-live="polite">
+								<small className={draftAnalogyLeftMatch ? 'is-valid' : 'is-missing'}>{draftAnalogyLeftMatch ? draftAnalogyLeftMatch.word : 'First word not found'}</small>
+								<small className={draftAnalogySubtractMatch ? 'is-valid' : 'is-missing'}>{draftAnalogySubtractMatch ? draftAnalogySubtractMatch.word : 'Subtract word not found'}</small>
+								<small className={draftAnalogyRightMatch ? 'is-valid' : 'is-missing'}>{draftAnalogyRightMatch ? draftAnalogyRightMatch.word : 'Second word not found'}</small>
+							</div>
+							<div className="preset-drawer">
+								<span>Relationship presets</span>
+								<div className="preset-grid">
+									{analogyPresets.map((preset) => (
+										<button
+											key={preset.id}
+											className={activePresetId === preset.id ? 'is-active' : ''}
+											type="button"
+											onClick={() => handlePresetSelect(preset)}
+											disabled={!preset.isAvailable || isPresentingAnalogy}
+											title={`${preset.left} - ${preset.subtract} + ${preset.right}`}
+										>
+											<strong>{preset.label}</strong>
+											<small>
+												{preset.left}
+												{' - '}
+												{preset.subtract}
+												{' + '}
+												{preset.right}
+											</small>
+										</button>
+									))}
+								</div>
+							</div>
+							<button
+								className="calculate-button"
+								type="button"
+								onClick={handleCalculateAnalogy}
+								disabled={!canCalculateAnalogy || isPresentingAnalogy}
+							>
+								{isPresentingAnalogy ? 'Drawing...' : hasPendingAnalogyChanges ? 'Recalculate' : 'Calculate'}
+							</button>
+							<button
+								className="clear-button"
+								type="button"
+								onClick={handleClear}
+							>
+								Clear
+							</button>
+							<div className="analogy-result">
+								<small>{analogyResult ? arithmeticExpression : draftArithmeticExpression}</small>
+								<strong>{shouldRevealAnalogyResult ? analogyResult.word : analogyResult ? 'Drawing calculation...' : 'Ready when you calculate'}</strong>
+								{shouldRevealAnalogyResult && (
+									<em>{(analogyResult.score * 100).toFixed(1)}% cosine match</em>
+								)}
+								{hasPendingAnalogyChanges && (
+									<em>Inputs changed. Calculate to update the scene.</em>
+								)}
+							</div>
+							{shouldRevealAnalogyResult && analogyExplanation && (
+								<div className="analogy-explanation">
+									<span>Explain mode</span>
+									<p>{analogyExplanation}</p>
+								</div>
+							)}
+							{isAnalogyPresentationDone && analogyResults.length > 0 && (
+								<ol className="analogy-candidates">
+									<li className="is-answer" key={analogyResult.id}>
+										<span>{analogyResult.word}</span>
+										<small>{analogyResult.score.toFixed(3)}</small>
+									</li>
+									{similarCandidates.map((candidate) => (
+										<li key={candidate.id}>
+											<button
+												className="candidate-switch"
+												type="button"
+												role="switch"
+												aria-checked={visibleCandidateIds.includes(candidate.id)}
+												onClick={() => handleCandidateToggle(candidate.id)}
+											>
+												<span className="candidate-switch-track" aria-hidden="true" />
+												<strong>{candidate.word}</strong>
+											</button>
+											<small>{candidate.score.toFixed(3)}</small>
+										</li>
+									))}
+								</ol>
+							)}
+						</>
+					) : (
+						<>
+							<span>Compare two words</span>
+							<div className="compare-controls">
+								<input
+									type="search"
+									value={compareLeft}
+									onChange={(event) => setCompareLeft(event.target.value)}
+									placeholder="king"
+									autoComplete="off"
+									aria-label="First compared word"
+								/>
+								<b>{'->'}</b>
+								<input
+									type="search"
+									value={compareRight}
+									onChange={(event) => setCompareRight(event.target.value)}
+									placeholder="queen"
+									autoComplete="off"
+									aria-label="Second compared word"
+								/>
+							</div>
+							<div className="analogy-validation compare-validation" aria-live="polite">
+								<small className={draftCompareLeftMatch ? 'is-valid' : 'is-missing'}>{draftCompareLeftMatch ? draftCompareLeftMatch.word : 'First word not found'}</small>
+								<small className={draftCompareRightMatch ? 'is-valid' : 'is-missing'}>{draftCompareRightMatch ? draftCompareRightMatch.word : 'Second word not found'}</small>
+							</div>
+							<button
+								className="calculate-button compare-button"
+								type="button"
+								onClick={handleCompareWords}
+								disabled={!canCompareWords}
+							>
+								{hasPendingCompareChanges ? 'Recompare' : 'Compare'}
+							</button>
+							<button
+								className="clear-button"
+								type="button"
+								onClick={handleClear}
+							>
+								Clear
+							</button>
+							<div className="analogy-result compare-result">
+								<small>{calculatedCompare ? compareExpression : `${draftCompareLeftMatch?.word || compareLeft || '?'} -> ${draftCompareRightMatch?.word || compareRight || '?'}`}</small>
+								<strong>{calculatedCompare ? `${(Math.max(0, compareScore) * 100).toFixed(1)}% similar` : 'Ready when you compare'}</strong>
+								{hasPendingCompareChanges && (
+									<em>Inputs changed. Compare to update the scene.</em>
+								)}
+							</div>
+							{calculatedCompare && compareExplanation && (
+								<div className="analogy-explanation compare-explanation">
+									<span>Relationship readout</span>
+									<p>{compareExplanation}</p>
+								</div>
+							)}
+							{calculatedCompare && (
+								<div className="compare-neighborhoods">
+									<div className="compare-neighbor-group">
+										<span>Shared neighbors</span>
+										{compareSharedNeighbors.length > 0 ? (
+											<ol className="analogy-candidates">
+												{compareSharedNeighbors.map((neighbor) => (
+													<li key={neighbor.id}>
+														<button
+															className="candidate-switch"
+															type="button"
+															role="switch"
+															aria-checked={visibleCompareNeighborIds.includes(neighbor.id)}
+															onClick={() => handleCompareNeighborToggle(neighbor.id)}
+														>
+															<span className="candidate-switch-track" aria-hidden="true" />
+															<strong>{neighbor.word}</strong>
+														</button>
+														<small>{neighbor.score.toFixed(3)}</small>
+													</li>
+												))}
+											</ol>
+										) : (
+											<p>No shared top neighbors.</p>
+										)}
+									</div>
+									<div className="compare-neighbor-columns">
+										<div className="compare-neighbor-group">
+											<span>{compareLeftMatch?.word || 'Left'} leans toward</span>
+											<ol className="analogy-candidates">
+												{compareUniqueLeftNeighbors.map((neighbor) => (
+													<li key={neighbor.id}>
+														<button
+															className="candidate-switch"
+															type="button"
+															role="switch"
+															aria-checked={visibleCompareNeighborIds.includes(neighbor.id)}
+															onClick={() => handleCompareNeighborToggle(neighbor.id)}
+														>
+															<span className="candidate-switch-track" aria-hidden="true" />
+															<strong>{neighbor.word}</strong>
+														</button>
+														<small>{neighbor.score.toFixed(3)}</small>
+													</li>
+												))}
+											</ol>
+										</div>
+										<div className="compare-neighbor-group">
+											<span>{compareRightMatch?.word || 'Right'} leans toward</span>
+											<ol className="analogy-candidates">
+												{compareUniqueRightNeighbors.map((neighbor) => (
+													<li key={neighbor.id}>
+														<button
+															className="candidate-switch"
+															type="button"
+															role="switch"
+															aria-checked={visibleCompareNeighborIds.includes(neighbor.id)}
+															onClick={() => handleCompareNeighborToggle(neighbor.id)}
+														>
+															<span className="candidate-switch-track" aria-hidden="true" />
+															<strong>{neighbor.word}</strong>
+														</button>
+														<small>{neighbor.score.toFixed(3)}</small>
+													</li>
+												))}
+											</ol>
+										</div>
+									</div>
+								</div>
+							)}
+						</>
 					)}
 				</div>
 
