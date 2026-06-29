@@ -393,6 +393,7 @@ function EmbeddingViewer() {
 	const [visibleCandidateIds, setVisibleCandidateIds] = useState([]);
 	const [visibleCompareNeighborIds, setVisibleCompareNeighborIds] = useState([]);
 	const [isTutorialOpen, setIsTutorialOpen] = useState(true);
+	const [hasStartedExperience, setHasStartedExperience] = useState(false);
 	const [tutorialSlide, setTutorialSlide] = useState(0);
 	const [shareStatus, setShareStatus] = useState('');
 	const [isIntroOrbiting, setIsIntroOrbiting] = useState(true);
@@ -1011,6 +1012,7 @@ function EmbeddingViewer() {
 		similarCandidates,
 	]);
 	const handleTutorialClose = useCallback(() => {
+		setHasStartedExperience(true);
 		setIsTutorialOpen(false);
 	}, []);
 	const handleTutorialOpen = useCallback(() => {
@@ -1071,6 +1073,7 @@ function EmbeddingViewer() {
 
 		const params = new URLSearchParams(window.location.search);
 		if (params.size === 0) return;
+		setHasStartedExperience(true);
 		setIsTutorialOpen(false);
 		setIsIntroOrbiting(false);
 
@@ -1503,6 +1506,8 @@ function EmbeddingViewer() {
 		window.setTimeout(() => setShareStatus(''), 1800);
 	};
 
+	const shouldRenderExperience = hasStartedExperience || !isTutorialOpen;
+
 	return (
 		<main className="viewer-shell">
 			{showLoader && (<a.div
@@ -1514,77 +1519,81 @@ function EmbeddingViewer() {
 				<LoadingScreen status={status} />
 			</a.div>
 			)}
-			<Canvas
-				className="embedding-canvas"
-				camera={{ position: cameraPosition.current, fov: 53, near: 1, far: 5000 }}
-				dpr={[1, 2]}
-				gl={{ antialias: true, alpha: false }}
-				onPointerMissed={() => setSelectedEmbedding(null)}
-			>
-				<CartesianSpace
-					embeddings={embeddings}
-					visibleCount={visibleCount}
-					hoveredId={hoveredEmbedding?.id}
-					selectedId={selectedEmbedding?.id}
-					searchId={searchMatch?.id}
-					analogyIds={activeMode === 'arithmetic' ? analogyIds : []}
-					analogyInputIds={activeMode === 'arithmetic' ? analogyInputIds : []}
-					analogyResultId={activeMode === 'arithmetic' ? analogyResult?.id : undefined}
-					analogyLinks={activeMode === 'arithmetic' ? analogyLinks : []}
-					visibleCandidateIds={activeMode === 'arithmetic' ? visibleCandidateIds : []}
-					compareWordIds={activeMode === 'compare' ? compareWordIds : []}
-					compareNeighborIds={activeMode === 'compare' ? visibleCompareNeighborIds : []}
-					compareLinks={activeMode === 'compare' ? compareLinks : []}
-					pathWordIds={activeMode === 'path' ? revealedPathWordIds : []}
-					pathLinks={activeMode === 'path' ? revealedPathLinks : []}
-					analogyRevealStep={presentationStep}
-					analogyPresentationDone={activeMode === 'arithmetic' && isAnalogyPresentationDone}
-					presentationRunId={presentationRunId}
-					isIntroOrbiting={isIntroOrbiting}
-					onHover={setHoveredEmbedding}
-					onSelect={(embedding) => {
-						setIsIntroOrbiting(false);
-						setSelectedEmbedding(embedding);
-					}}
-					onCameraInteraction={() => setIsIntroOrbiting(false)}
-				/>
-			</Canvas>
+			{shouldRenderExperience && (
+				<>
+					<Canvas
+						className="embedding-canvas"
+						camera={{ position: cameraPosition.current, fov: 53, near: 1, far: 5000 }}
+						dpr={[1, 2]}
+						gl={{ antialias: true, alpha: false }}
+						onPointerMissed={() => setSelectedEmbedding(null)}
+					>
+						<CartesianSpace
+							embeddings={embeddings}
+							visibleCount={visibleCount}
+							hoveredId={hoveredEmbedding?.id}
+							selectedId={selectedEmbedding?.id}
+							searchId={searchMatch?.id}
+							analogyIds={activeMode === 'arithmetic' ? analogyIds : []}
+							analogyInputIds={activeMode === 'arithmetic' ? analogyInputIds : []}
+							analogyResultId={activeMode === 'arithmetic' ? analogyResult?.id : undefined}
+							analogyLinks={activeMode === 'arithmetic' ? analogyLinks : []}
+							visibleCandidateIds={activeMode === 'arithmetic' ? visibleCandidateIds : []}
+							compareWordIds={activeMode === 'compare' ? compareWordIds : []}
+							compareNeighborIds={activeMode === 'compare' ? visibleCompareNeighborIds : []}
+							compareLinks={activeMode === 'compare' ? compareLinks : []}
+							pathWordIds={activeMode === 'path' ? revealedPathWordIds : []}
+							pathLinks={activeMode === 'path' ? revealedPathLinks : []}
+							analogyRevealStep={presentationStep}
+							analogyPresentationDone={activeMode === 'arithmetic' && isAnalogyPresentationDone}
+							presentationRunId={presentationRunId}
+							isIntroOrbiting={isIntroOrbiting}
+							onHover={setHoveredEmbedding}
+							onSelect={(embedding) => {
+								setIsIntroOrbiting(false);
+								setSelectedEmbedding(embedding);
+							}}
+							onCameraInteraction={() => setIsIntroOrbiting(false)}
+						/>
+					</Canvas>
 
-			{activeMode === 'arithmetic' && shouldRevealAnalogyResult && (
-				<div className="analogy-stage-readout" aria-live="polite">
-					<span>{arithmeticExpression}</span>
-					<strong>{analogyResult.word}</strong>
-				</div>
-			)}
+					{activeMode === 'arithmetic' && shouldRevealAnalogyResult && (
+						<div className="analogy-stage-readout" aria-live="polite">
+							<span>{arithmeticExpression}</span>
+							<strong>{analogyResult.word}</strong>
+						</div>
+					)}
 
-			{activeMode === 'compare' && calculatedCompare && compareLeftMatch && compareRightMatch && (
-				<div className="analogy-stage-readout compare-stage-readout" aria-live="polite">
-					<span>{compareExpression}</span>
-					<strong>{(Math.max(0, compareScore) * 100).toFixed(1)}%</strong>
-				</div>
-			)}
+					{activeMode === 'compare' && calculatedCompare && compareLeftMatch && compareRightMatch && (
+						<div className="analogy-stage-readout compare-stage-readout" aria-live="polite">
+							<span>{compareExpression}</span>
+							<strong>{(Math.max(0, compareScore) * 100).toFixed(1)}%</strong>
+						</div>
+					)}
 
-			{activeMode === 'path' && calculatedPath && semanticPath.length > 1 && (
-				<div className="analogy-stage-readout path-stage-readout" aria-live="polite">
-					<span>{`${semanticPath[0].word} -> ${semanticPath[semanticPath.length - 1].word}`}</span>
-					<strong>{semanticPath.length - 1} steps</strong>
-				</div>
-			)}
+					{activeMode === 'path' && calculatedPath && semanticPath.length > 1 && (
+						<div className="analogy-stage-readout path-stage-readout" aria-live="polite">
+							<span>{`${semanticPath[0].word} -> ${semanticPath[semanticPath.length - 1].word}`}</span>
+							<strong>{semanticPath.length - 1} steps</strong>
+						</div>
+					)}
 
-			{(activeInsight || inspectorEmbedding) && (
-				<div className="semantic-rail">
-					<InsightPanel insight={activeInsight} />
-					<WordInspector
-						embedding={inspectorEmbedding}
-						neighbors={inspectorNeighbors}
-						onClose={() => {
-							setSelectedEmbedding(null);
-							setSearchTerm('');
-						}}
-						onUseWord={handleUseInspectedWord}
-						onSelectNeighbor={handleSelectInspectorNeighbor}
-					/>
-				</div>
+					{(activeInsight || inspectorEmbedding) && (
+						<div className="semantic-rail">
+							<InsightPanel insight={activeInsight} />
+							<WordInspector
+								embedding={inspectorEmbedding}
+								neighbors={inspectorNeighbors}
+								onClose={() => {
+									setSelectedEmbedding(null);
+									setSearchTerm('');
+								}}
+								onUseWord={handleUseInspectedWord}
+								onSelectNeighbor={handleSelectInspectorNeighbor}
+							/>
+						</div>
+					)}
+				</>
 			)}
 
 			{!showLoader && (
@@ -1675,6 +1684,7 @@ function EmbeddingViewer() {
 				</a.div>
 			)}
 
+			{shouldRenderExperience && (
 			<section className="viewer-panel" aria-label="Embedding controls">
 				<div>
 					<p className="panel-kicker">Word2Vec space</p>
@@ -2235,6 +2245,7 @@ function EmbeddingViewer() {
 					</button>
 				</div>
 			</section>
+			)}
 
 			{error && (
 				<div className="error-banner" role="alert">
