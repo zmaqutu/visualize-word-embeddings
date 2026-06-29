@@ -15,18 +15,34 @@ const COMPARE_WORD_COLOR = new THREE.Color('#fbbf24');
 const COMPARE_NEIGHBOR_COLOR = new THREE.Color('#76e4f7');
 const PATH_WORD_COLOR = new THREE.Color('#f472b6');
 const DIM_COLOR = new THREE.Color('#536170');
-const CAMERA_FOCUS_DURATION = 2.4;
 
 const getLabelLift = ({
+	isAnalogyInput,
 	isAnalogyResult,
 	isPrimaryWord,
-	isAnalogyInput,
 	isSecondaryWord,
 }) => {
 	if (isAnalogyResult) return 8.5;
 	if (isPrimaryWord || isAnalogyInput) return 6;
 	if (isSecondaryWord) return 4.5;
 	return 3.5;
+};
+
+const getPointScale = ({
+	isActive,
+	isAnalogyInput,
+	isAnalogyResult,
+	isCompareNeighbor,
+	isCompareWord,
+	isPathWord,
+	isVisibleCandidate,
+}) => {
+	if (isAnalogyResult) return 3.15;
+	if (isCompareWord || isPathWord) return 2.65;
+	if (isAnalogyInput) return 2.35;
+	if (isVisibleCandidate || isCompareNeighbor) return 1.85;
+	if (isActive) return 1.9;
+	return 1;
 };
 
 const beamVertexShader = `
@@ -212,7 +228,6 @@ function CartesianSpace({
 	onSelect,
 }) {
 	const { camera } = useThree();
-	const controlsRef = useRef();
 	const wordEmbeddingsMeshRef = useRef();
 	const raycasterRef = useRef(new THREE.Raycaster());
 	const pointer = useRef(new THREE.Vector2());
@@ -255,10 +270,6 @@ function CartesianSpace({
 	const isAnalogyFocusMode = Number.isInteger(analogyResultId);
 	const isFocusMode = isAnalogyFocusMode || isCompareFocusMode || isPathFocusMode;
 	const focusProgressRef = useRef(0);
-	const cameraFocusSignatureRef = useRef('');
-	const cameraFocusStartedAtRef = useRef(0);
-	const cameraFocusStartPositionRef = useRef(new THREE.Vector3());
-	const cameraFocusStartTargetRef = useRef(new THREE.Vector3());
 
 	const renderedEmbeddings = useMemo(() => {
 		if (isCompareFocusMode) {
@@ -383,7 +394,15 @@ function CartesianSpace({
 			const inactiveFocusScale = isFocusMode && !isActive
 				? THREE.MathUtils.lerp(1, 0.1, focusProgress)
 				: 1;
-			const baseScale = isAnalogyResult ? 3.15 : isCompareWord || isPathWord ? 2.65 : isAnalogyInput ? 2.35 : isVisibleCandidate || isCompareNeighbor ? 1.85 : isActive ? 1.9 : 1;
+			const baseScale = getPointScale({
+				isActive,
+				isAnalogyInput,
+				isAnalogyResult,
+				isCompareNeighbor,
+				isCompareWord,
+				isPathWord,
+				isVisibleCandidate,
+			});
 			const scale = baseScale * inactiveFocusScale * (isActive ? activeScaleBoost : 1);
 			colorScratch.copy(color).lerp(dimColor, isFocusMode && !isActive ? focusProgress : 0);
 			matrix.compose(position, rotation, new THREE.Vector3(scale, scale, scale));
@@ -496,120 +515,6 @@ function CartesianSpace({
 		));
 	}, [pathLinks]);
 
-	const cameraFocus = useMemo(() => {
-		const pointsByKey = new Map();
-
-		activeLabels.forEach((embedding) => {
-			const isHoverOnly = embedding.id === hoveredId
-				&& embedding.id !== selectedId
-				&& embedding.id !== searchId
-				&& !analogyInputIdSet.has(embedding.id)
-				&& embedding.id !== analogyResultId
-				&& !visibleCandidateIdSet.has(embedding.id)
-				&& !compareWordIdSet.has(embedding.id)
-				&& !compareNeighborIdSet.has(embedding.id)
-				&& !pathWordIdSet.has(embedding.id);
-
-			if (isHoverOnly) return;
-
-			if (Array.isArray(embedding.reducedVector)) {
-				pointsByKey.set(`word-${embedding.id}`, embedding.reducedVector);
-			}
-		});
-
-		[
-			...visibleAnalogyLinks,
-			...visibleCompareLinks,
-			...visiblePathLinks,
-		].forEach(({ from, to }) => {
-			if (Array.isArray(from.reducedVector)) pointsByKey.set(`from-${from.id}`, from.reducedVector);
-			if (Array.isArray(to.reducedVector)) pointsByKey.set(`to-${to.id}`, to.reducedVector);
-		});
-
-		const points = Array.from(pointsByKey.values());
-		if (points.length === 0) return null;
-
-		const center = new THREE.Vector3();
-		points.forEach((point) => center.add(new THREE.Vector3(...point)));
-		center.divideScalar(points.length);
-
-		const radius = points.reduce((maxRadius, point) => (
-			Math.max(maxRadius, center.distanceTo(new THREE.Vector3(...point)))
-		), 18);
-		const distance = THREE.MathUtils.clamp(radius * 2.15 + 92, 110, 330);
-		const offsetDirection = new THREE.Vector3(0.86, 0.68, 0.58).normalize();
-		const position = center.clone().add(offsetDirection.clone().multiplyScalar(distance));
-		const firstPoint = new THREE.Vector3(...points[0]);
-		const lastPoint = new THREE.Vector3(...points[points.length - 1]);
-		const lateralDirection = lastPoint.clone().sub(firstPoint).cross(new THREE.Vector3(0, 1, 0));
-		if (lateralDirection.lengthSq() < 0.001) {
-			lateralDirection.set(-0.58, 0, 0.86);
-		}
-		lateralDirection.normalize();
-		const controlPosition = center.clone()
-			.add(offsetDirection.clone().multiplyScalar(distance * 1.3))
-			.add(lateralDirection.multiplyScalar(Math.max(32, radius * 0.82)))
-			.add(new THREE.Vector3(0, Math.max(26, distance * 0.22), 0));
-		const signature = points
-			.map((point) => point.map((value) => value.toFixed(1)).join(','))
-			.sort()
-			.join('|');
-
-		return {
-			center,
-			controlPosition,
-			position,
-			signature,
-		};
-	}, [
-		activeLabels,
-		analogyInputIdSet,
-		analogyResultId,
-		compareNeighborIdSet,
-		compareWordIdSet,
-		hoveredId,
-		pathWordIdSet,
-		searchId,
-		selectedId,
-		visibleAnalogyLinks,
-		visibleCandidateIdSet,
-		visibleCompareLinks,
-		visiblePathLinks,
-	]);
-
-	useEffect(() => {
-		if (!cameraFocus || cameraFocus.signature === cameraFocusSignatureRef.current) return;
-
-		cameraFocusSignatureRef.current = cameraFocus.signature;
-		cameraFocusStartedAtRef.current = performance.now();
-		cameraFocusStartPositionRef.current.copy(camera.position);
-		if (controlsRef.current) {
-			cameraFocusStartTargetRef.current.copy(controlsRef.current.target);
-		} else {
-			cameraFocusStartTargetRef.current.set(0, 0, 0);
-		}
-	}, [camera, cameraFocus]);
-
-	useFrame(() => {
-		if (!cameraFocus || !controlsRef.current) return;
-
-		const elapsed = (performance.now() - cameraFocusStartedAtRef.current) / 1000;
-		if (elapsed >= CAMERA_FOCUS_DURATION) return;
-
-		const progress = THREE.MathUtils.clamp(elapsed / CAMERA_FOCUS_DURATION, 0, 1);
-		const easedProgress = progress < 0.72
-			? THREE.MathUtils.smootherstep(progress / 0.72, 0, 1) * 0.84
-			: 0.84 + THREE.MathUtils.smootherstep((progress - 0.72) / 0.28, 0, 1) * 0.16;
-		const startToControl = cameraFocusStartPositionRef.current.clone().lerp(cameraFocus.controlPosition, easedProgress);
-		const controlToEnd = cameraFocus.controlPosition.clone().lerp(cameraFocus.position, easedProgress);
-		const cinematicPosition = startToControl.lerp(controlToEnd, easedProgress);
-		const cinematicTarget = cameraFocusStartTargetRef.current.clone().lerp(cameraFocus.center, easedProgress);
-
-		camera.position.copy(cinematicPosition);
-		controlsRef.current.target.copy(cinematicTarget);
-		controlsRef.current.update();
-	});
-
 	return (
 		<>
 			<color attach="background" args={['#101820']} />
@@ -658,30 +563,39 @@ function CartesianSpace({
 					delay={index * 0.24}
 				/>
 			))}
-			{activeLabels.map((embedding) => (
-				<Html
-					key={embedding.id}
-					position={[
-						embedding.reducedVector[0],
-						embedding.reducedVector[1] + getLabelLift({
-							isAnalogyResult: embedding.id === analogyResultId,
-							isPrimaryWord: compareWordIdSet.has(embedding.id) || pathWordIdSet.has(embedding.id),
-							isAnalogyInput: analogyInputIdSet.has(embedding.id),
-							isSecondaryWord: visibleCandidateIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id),
-						}),
-						embedding.reducedVector[2],
-					]}
-					center
-					zIndexRange={[100, 0]}
-					className={`word-label ${analogyInputIdSet.has(embedding.id) ? 'analogy-input-label' : ''} ${embedding.id === analogyResultId ? 'analogy-result-label' : ''} ${visibleCandidateIdSet.has(embedding.id) ? 'analogy-candidate-label' : ''} ${compareWordIdSet.has(embedding.id) ? 'compare-word-label' : ''} ${compareNeighborIdSet.has(embedding.id) ? 'compare-neighbor-label' : ''} ${pathWordIdSet.has(embedding.id) ? 'path-word-label' : ''}`}
-				>
-					{embedding.word}
-				</Html>
-			))}
+			{activeLabels.map((embedding) => {
+				const isAnalogyInput = analogyInputIdSet.has(embedding.id);
+				const isAnalogyResult = embedding.id === analogyResultId;
+				const isVisibleCandidate = visibleCandidateIdSet.has(embedding.id);
+				const isCompareWord = compareWordIdSet.has(embedding.id);
+				const isCompareNeighbor = compareNeighborIdSet.has(embedding.id);
+				const isPathWord = pathWordIdSet.has(embedding.id);
+				const labelLift = getLabelLift({
+					isAnalogyResult,
+					isPrimaryWord: isCompareWord || isPathWord,
+					isAnalogyInput,
+					isSecondaryWord: isVisibleCandidate || isCompareNeighbor,
+				});
+
+				return (
+					<Html
+						key={embedding.id}
+						position={[
+							embedding.reducedVector[0],
+							embedding.reducedVector[1] + labelLift,
+							embedding.reducedVector[2],
+						]}
+						center
+						zIndexRange={[100, 0]}
+						className={`word-label ${isAnalogyInput ? 'analogy-input-label' : ''} ${isAnalogyResult ? 'analogy-result-label' : ''} ${isVisibleCandidate ? 'analogy-candidate-label' : ''} ${isCompareWord ? 'compare-word-label' : ''} ${isCompareNeighbor ? 'compare-neighbor-label' : ''} ${isPathWord ? 'path-word-label' : ''}`}
+					>
+						{embedding.word}
+					</Html>
+				);
+			})}
 			<axesHelper args={[155]} />
 			<gridHelper args={[320, 32, '#43515f', '#24313d']} />
 			<OrbitControls
-				ref={controlsRef}
 				enableDamping
 				dampingFactor={0.08}
 				makeDefault
