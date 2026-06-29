@@ -26,6 +26,11 @@ const DEFAULT_COMPARE_LEFT = 'king';
 const DEFAULT_COMPARE_RIGHT = 'queen';
 const DEFAULT_PATH_START = 'music';
 const DEFAULT_PATH_END = 'art';
+const getBasePath = () => (import.meta.env.BASE_URL.endsWith('/')
+	? import.meta.env.BASE_URL
+	: `${import.meta.env.BASE_URL}/`);
+const BACKGROUND_AUDIO_SRC = `${getBasePath()}audio/blinded-me-with-science.webm`;
+const BACKGROUND_AUDIO_VOLUME = 0.34;
 const PATH_PRESETS = [
 	{ id: 'creative', label: 'creative', start: 'music', end: 'art' },
 	{ id: 'royalty-path', label: 'royalty', start: 'king', end: 'queen' },
@@ -371,6 +376,8 @@ function EmbeddingViewer() {
 	const { embeddings, loading, error, status, vectorValues, vectorDimensions } = useWordEmbeddings();
 
 	const cameraPosition = useRef([100, 200, 300]);
+	const backgroundAudioRef = useRef(null);
+	const audioFadeRef = useRef(null);
 	const [showLoader, setShowLoader] = useState(true);
 	const [pointCount, setPointCount] = useState(DEFAULT_POINT_COUNT);
 	const [hoveredEmbedding, setHoveredEmbedding] = useState(null);
@@ -398,6 +405,8 @@ function EmbeddingViewer() {
 	const [tutorialSlide, setTutorialSlide] = useState(0);
 	const [shareStatus, setShareStatus] = useState('');
 	const [isIntroOrbiting, setIsIntroOrbiting] = useState(true);
+	const [isBackgroundAudioPlaying, setIsBackgroundAudioPlaying] = useState(false);
+	const [audioStatus, setAudioStatus] = useState('');
 	const hasAppliedSharedView = useRef(false);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
@@ -1012,10 +1021,65 @@ function EmbeddingViewer() {
 		semanticPath,
 		similarCandidates,
 	]);
+	const fadeBackgroundAudio = useCallback((targetVolume, onComplete) => {
+		const audio = backgroundAudioRef.current;
+		if (!audio) return;
+
+		window.clearInterval(audioFadeRef.current);
+		audioFadeRef.current = window.setInterval(() => {
+			const nextVolume = audio.volume + ((targetVolume - audio.volume) * 0.18);
+			audio.volume = Math.max(0, Math.min(BACKGROUND_AUDIO_VOLUME, nextVolume));
+
+			if (Math.abs(audio.volume - targetVolume) < 0.01) {
+				audio.volume = targetVolume;
+				window.clearInterval(audioFadeRef.current);
+				onComplete?.();
+			}
+		}, 40);
+	}, []);
+	const getBackgroundAudio = useCallback(() => {
+		if (!backgroundAudioRef.current) {
+			backgroundAudioRef.current = new Audio(BACKGROUND_AUDIO_SRC);
+			backgroundAudioRef.current.loop = true;
+			backgroundAudioRef.current.preload = 'auto';
+			backgroundAudioRef.current.addEventListener('error', () => {
+				setAudioStatus('Audio unavailable');
+				setIsBackgroundAudioPlaying(false);
+			});
+		}
+
+		return backgroundAudioRef.current;
+	}, []);
+	const startBackgroundAudio = useCallback(async () => {
+		const audio = getBackgroundAudio();
+
+		setAudioStatus('');
+
+		try {
+			audio.volume = 0;
+			await audio.play();
+			setIsBackgroundAudioPlaying(true);
+			fadeBackgroundAudio(BACKGROUND_AUDIO_VOLUME);
+		} catch {
+			setAudioStatus('Audio blocked');
+			setIsBackgroundAudioPlaying(false);
+		}
+	}, [fadeBackgroundAudio, getBackgroundAudio]);
+	const stopBackgroundAudio = useCallback(() => {
+		const audio = backgroundAudioRef.current;
+		if (!audio) return;
+
+		setAudioStatus('');
+		fadeBackgroundAudio(0, () => {
+			audio.pause();
+			setIsBackgroundAudioPlaying(false);
+		});
+	}, [fadeBackgroundAudio]);
 	const handleTutorialClose = useCallback(() => {
 		setHasStartedExperience(true);
 		setIsTutorialOpen(false);
-	}, []);
+		void startBackgroundAudio();
+	}, [startBackgroundAudio]);
 	const handleTutorialOpen = useCallback(() => {
 		setIsTutorialOpen(true);
 	}, []);
@@ -1043,8 +1107,8 @@ function EmbeddingViewer() {
 		config: { tension: 170, friction: 26 },
 	});
 	const tutorialCardProps = useSpring({
-		x: isTutorialOpen ? 0 : 43,
-		y: isTutorialOpen ? 0 : -42,
+		x: 0,
+		y: 0,
 		scale: 1,
 		rotate: isTutorialOpen ? 0 : 8,
 		config: isTutorialOpen
@@ -1067,6 +1131,13 @@ function EmbeddingViewer() {
 			setPointCount(Math.min(DEFAULT_POINT_COUNT, embeddings.length));
 		}
 	}, [embeddings.length]);
+
+	useEffect(() => () => {
+		window.clearInterval(audioFadeRef.current);
+		if (backgroundAudioRef.current) {
+			backgroundAudioRef.current.pause();
+		}
+	}, []);
 
 	useEffect(() => {
 		if (hasAppliedSharedView.current || embeddings.length === 0) return;
@@ -1507,6 +1578,15 @@ function EmbeddingViewer() {
 		window.setTimeout(() => setShareStatus(''), 1800);
 	};
 
+	const handleBackgroundAudioToggle = async () => {
+		if (isBackgroundAudioPlaying) {
+			stopBackgroundAudio();
+			return;
+		}
+
+		await startBackgroundAudio();
+	};
+
 	const shouldRenderExperience = hasStartedExperience || !isTutorialOpen;
 
 	return (
@@ -1596,6 +1676,21 @@ function EmbeddingViewer() {
 						</div>
 					)}
 				</>
+			)}
+
+			{shouldRenderExperience && (
+				<div className="audio-control">
+					<button
+						type="button"
+						className={isBackgroundAudioPlaying ? 'is-playing' : ''}
+						onClick={handleBackgroundAudioToggle}
+						aria-pressed={isBackgroundAudioPlaying}
+						aria-label={isBackgroundAudioPlaying ? 'Pause background music' : 'Play background music'}
+						title={audioStatus || (isBackgroundAudioPlaying ? 'Pause background music' : 'Play background music')}
+					>
+						<span aria-hidden="true">{isBackgroundAudioPlaying ? 'II' : '♪'}</span>
+					</button>
+				</div>
 			)}
 
 			{!showLoader && (

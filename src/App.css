@@ -98,6 +98,48 @@ input {
   z-index: 20 !important;
 }
 
+.audio-control {
+  position: absolute;
+  top: 13px;
+  right: 104px;
+  z-index: 24;
+}
+
+.audio-control button {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(177, 199, 218, 0.22);
+  border-radius: 999px;
+  color: #eef5fb;
+  background: rgba(13, 23, 32, 0.78);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.audio-control button:hover,
+.audio-control button.is-playing {
+  border-color: rgba(52, 211, 153, 0.44);
+  background: rgba(10, 45, 38, 0.84);
+  transform: translateY(-1px);
+}
+
+.audio-control span {
+  color: #ffffff;
+  font-size: 1.8rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.audio-control button.is-playing span {
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+}
+
 .viewer-panel {
   position: absolute;
   left: 24px;
@@ -532,6 +574,14 @@ input {
 }
 
 .tutorial-backdrop.is-docked {
+  top: 16px;
+  right: 16px;
+  bottom: auto;
+  left: auto;
+  display: block;
+  width: 72px;
+  height: 72px;
+  padding: 0;
   background: transparent;
   backdrop-filter: none;
   pointer-events: none;
