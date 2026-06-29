@@ -395,6 +395,7 @@ function EmbeddingViewer() {
 	const [isTutorialOpen, setIsTutorialOpen] = useState(true);
 	const [tutorialSlide, setTutorialSlide] = useState(0);
 	const [shareStatus, setShareStatus] = useState('');
+	const [isIntroOrbiting, setIsIntroOrbiting] = useState(true);
 	const hasAppliedSharedView = useRef(false);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
@@ -1071,6 +1072,7 @@ function EmbeddingViewer() {
 		const params = new URLSearchParams(window.location.search);
 		if (params.size === 0) return;
 		setIsTutorialOpen(false);
+		setIsIntroOrbiting(false);
 
 		const sharedMode = params.get('mode');
 		const sharedCount = Number(params.get('count'));
@@ -1213,12 +1215,14 @@ function EmbeddingViewer() {
 	}, [handleTutorialClose, isTutorialOpen]);
 
 	const handlePointCountChange = (event) => {
+		setIsIntroOrbiting(false);
 		setPointCount(Number(event.target.value));
 	};
 
 	const setTimelineValue = (nextValue) => {
 		if (!activeTimeline) return;
 
+		setIsIntroOrbiting(false);
 		const clampedValue = Math.min(activeTimeline.max, Math.max(activeTimeline.min, nextValue));
 		setTimelinePlayback('manual');
 
@@ -1247,6 +1251,7 @@ function EmbeddingViewer() {
 	const handleTimelineReplay = () => {
 		if (!activeTimeline) return;
 
+		setIsIntroOrbiting(false);
 		setTimelinePlayback('auto');
 		if (activeTimeline.mode === 'arithmetic') {
 			setPresentationStep(0);
@@ -1257,6 +1262,8 @@ function EmbeddingViewer() {
 	};
 
 	const handleUseInspectedWord = (target, word) => {
+		setIsIntroOrbiting(false);
+
 		if (target.startsWith('compare')) {
 			setActiveMode('compare');
 			if (target === 'compare-left') {
@@ -1288,6 +1295,7 @@ function EmbeddingViewer() {
 	};
 
 	const handleSelectInspectorNeighbor = (neighbor) => {
+		setIsIntroOrbiting(false);
 		setSelectedEmbedding(neighbor);
 		setSearchTerm(neighbor.word);
 		if (neighbor.id >= pointCount) {
@@ -1299,6 +1307,7 @@ function EmbeddingViewer() {
 	};
 
 	const presentAnalogy = (leftMatch, subtractMatch, rightMatch) => {
+		setIsIntroOrbiting(false);
 		setActiveMode('arithmetic');
 		setCalculatedCompare(null);
 		setCalculatedPath(null);
@@ -1324,6 +1333,7 @@ function EmbeddingViewer() {
 	};
 
 	const handlePresetSelect = (preset) => {
+		setIsIntroOrbiting(false);
 		setAnalogyLeft(preset.left);
 		setAnalogySubtract(preset.subtract);
 		setAnalogyRight(preset.right);
@@ -1347,6 +1357,7 @@ function EmbeddingViewer() {
 	};
 
 	const handleCandidateToggle = (candidateId) => {
+		setIsIntroOrbiting(false);
 		setVisibleCandidateIds((currentIds) => (
 			currentIds.includes(candidateId)
 				? currentIds.filter((id) => id !== candidateId)
@@ -1357,6 +1368,7 @@ function EmbeddingViewer() {
 	const handleCompareWords = () => {
 		if (!canCompareWords) return;
 
+		setIsIntroOrbiting(false);
 		setActiveMode('compare');
 		setCalculatedCompare({
 			left: draftCompareLeftMatch.word,
@@ -1374,6 +1386,7 @@ function EmbeddingViewer() {
 	};
 
 	const handleCompareNeighborToggle = (neighborId) => {
+		setIsIntroOrbiting(false);
 		setVisibleCompareNeighborIds((currentIds) => (
 			currentIds.includes(neighborId)
 				? currentIds.filter((id) => id !== neighborId)
@@ -1384,6 +1397,7 @@ function EmbeddingViewer() {
 	const handleFindPath = () => {
 		if (!canFindPath) return;
 
+		setIsIntroOrbiting(false);
 		setActiveMode('path');
 		setCalculatedPath({
 			start: draftPathStartMatch.word,
@@ -1402,6 +1416,7 @@ function EmbeddingViewer() {
 	};
 
 	const handlePathPresetSelect = (preset) => {
+		setIsIntroOrbiting(false);
 		setPathStart(preset.start);
 		setPathEnd(preset.end);
 		setActiveMode('path');
@@ -1433,6 +1448,7 @@ function EmbeddingViewer() {
 	};
 
 	const handleClear = () => {
+		setIsIntroOrbiting(false);
 		setAnalogyLeft('');
 		setAnalogySubtract('');
 		setAnalogyRight('');
@@ -1462,6 +1478,7 @@ function EmbeddingViewer() {
 	const handleCopyShareLink = () => {
 		if (!shareUrl) return;
 
+		setIsIntroOrbiting(false);
 		setShareStatus('Copied');
 		try {
 			if (navigator.clipboard?.writeText) {
@@ -1523,8 +1540,13 @@ function EmbeddingViewer() {
 					analogyRevealStep={presentationStep}
 					analogyPresentationDone={activeMode === 'arithmetic' && isAnalogyPresentationDone}
 					presentationRunId={presentationRunId}
+					isIntroOrbiting={isIntroOrbiting}
 					onHover={setHoveredEmbedding}
-					onSelect={setSelectedEmbedding}
+					onSelect={(embedding) => {
+						setIsIntroOrbiting(false);
+						setSelectedEmbedding(embedding);
+					}}
+					onCameraInteraction={() => setIsIntroOrbiting(false)}
 				/>
 			</Canvas>
 
@@ -1669,7 +1691,10 @@ function EmbeddingViewer() {
 							type="button"
 							role="tab"
 							aria-selected={activeMode === 'arithmetic'}
-							onClick={() => setActiveMode('arithmetic')}
+							onClick={() => {
+								setIsIntroOrbiting(false);
+								setActiveMode('arithmetic');
+							}}
 						>
 							Arithmetic
 						</button>
@@ -1678,7 +1703,10 @@ function EmbeddingViewer() {
 							type="button"
 							role="tab"
 							aria-selected={activeMode === 'compare'}
-							onClick={() => setActiveMode('compare')}
+							onClick={() => {
+								setIsIntroOrbiting(false);
+								setActiveMode('compare');
+							}}
 						>
 							Compare
 						</button>
@@ -1687,7 +1715,10 @@ function EmbeddingViewer() {
 							type="button"
 							role="tab"
 							aria-selected={activeMode === 'path'}
-							onClick={() => setActiveMode('path')}
+							onClick={() => {
+								setIsIntroOrbiting(false);
+								setActiveMode('path');
+							}}
 						>
 							Path
 						</button>
@@ -1700,7 +1731,10 @@ function EmbeddingViewer() {
 								<input
 									type="search"
 									value={analogyLeft}
-									onChange={(event) => setAnalogyLeft(event.target.value)}
+									onChange={(event) => {
+										setIsIntroOrbiting(false);
+										setAnalogyLeft(event.target.value);
+									}}
 									placeholder="king"
 									autoComplete="off"
 									aria-label="First added word"
@@ -1709,7 +1743,10 @@ function EmbeddingViewer() {
 								<input
 									type="search"
 									value={analogySubtract}
-									onChange={(event) => setAnalogySubtract(event.target.value)}
+									onChange={(event) => {
+										setIsIntroOrbiting(false);
+										setAnalogySubtract(event.target.value);
+									}}
 									placeholder="man"
 									autoComplete="off"
 									aria-label="Subtracted word"
@@ -1718,7 +1755,10 @@ function EmbeddingViewer() {
 								<input
 									type="search"
 									value={analogyRight}
-									onChange={(event) => setAnalogyRight(event.target.value)}
+									onChange={(event) => {
+										setIsIntroOrbiting(false);
+										setAnalogyRight(event.target.value);
+									}}
 									placeholder="woman"
 									autoComplete="off"
 									aria-label="Second added word"
@@ -1868,7 +1908,10 @@ function EmbeddingViewer() {
 								<input
 									type="search"
 									value={compareLeft}
-									onChange={(event) => setCompareLeft(event.target.value)}
+									onChange={(event) => {
+										setIsIntroOrbiting(false);
+										setCompareLeft(event.target.value);
+									}}
 									placeholder="king"
 									autoComplete="off"
 									aria-label="First compared word"
@@ -1877,7 +1920,10 @@ function EmbeddingViewer() {
 								<input
 									type="search"
 									value={compareRight}
-									onChange={(event) => setCompareRight(event.target.value)}
+									onChange={(event) => {
+										setIsIntroOrbiting(false);
+										setCompareRight(event.target.value);
+									}}
 									placeholder="queen"
 									autoComplete="off"
 									aria-label="Second compared word"
@@ -1993,7 +2039,10 @@ function EmbeddingViewer() {
 								<input
 									type="search"
 									value={pathStart}
-									onChange={(event) => setPathStart(event.target.value)}
+									onChange={(event) => {
+										setIsIntroOrbiting(false);
+										setPathStart(event.target.value);
+									}}
 									placeholder="music"
 									autoComplete="off"
 									aria-label="Path start word"
@@ -2002,7 +2051,10 @@ function EmbeddingViewer() {
 								<input
 									type="search"
 									value={pathEnd}
-									onChange={(event) => setPathEnd(event.target.value)}
+									onChange={(event) => {
+										setIsIntroOrbiting(false);
+										setPathEnd(event.target.value);
+									}}
 									placeholder="art"
 									autoComplete="off"
 									aria-label="Path end word"
@@ -2140,7 +2192,10 @@ function EmbeddingViewer() {
 					<input
 						type="search"
 						value={searchTerm}
-						onChange={(event) => setSearchTerm(event.target.value)}
+						onChange={(event) => {
+							setIsIntroOrbiting(false);
+							setSearchTerm(event.target.value);
+						}}
 						placeholder="Try music, city, science..."
 						autoComplete="off"
 					/>

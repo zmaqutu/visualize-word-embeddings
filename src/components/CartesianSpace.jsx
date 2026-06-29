@@ -45,6 +45,46 @@ const getPointScale = ({
 	return 1;
 };
 
+function FullAxes({ size = 155 }) {
+	const geometry = useMemo(() => {
+		const axisGeometry = new THREE.BufferGeometry();
+		const positions = [
+			0, 0, 0, size, 0, 0,
+			0, 0, 0, -size, 0, 0,
+			0, 0, 0, 0, size, 0,
+			0, 0, 0, 0, -size, 0,
+			0, 0, 0, 0, 0, size,
+			0, 0, 0, 0, 0, -size,
+		];
+		const colors = [
+			0.95, 0.22, 0.34, 0.95, 0.22, 0.34,
+			0.46, 0.18, 0.25, 0.46, 0.18, 0.25,
+			0.42, 0.92, 0.48, 0.42, 0.92, 0.48,
+			0.18, 0.46, 0.25, 0.18, 0.46, 0.25,
+			0.2, 0.72, 1, 0.2, 0.72, 1,
+			0.12, 0.34, 0.52, 0.12, 0.34, 0.52,
+		];
+
+		axisGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+		axisGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+		return axisGeometry;
+	}, [size]);
+
+	const material = useMemo(() => new THREE.LineBasicMaterial({
+		vertexColors: true,
+		transparent: true,
+		opacity: 0.82,
+	}), []);
+
+	useEffect(() => () => {
+		geometry.dispose();
+		material.dispose();
+	}, [geometry, material]);
+
+	return <lineSegments geometry={geometry} material={material} />;
+}
+
 const beamVertexShader = `
 varying vec2 vUv;
 
@@ -224,8 +264,10 @@ function CartesianSpace({
 	analogyRevealStep = 0,
 	analogyPresentationDone = false,
 	presentationRunId = 0,
+	isIntroOrbiting = false,
 	onHover,
 	onSelect,
+	onCameraInteraction,
 }) {
 	const { camera } = useThree();
 	const wordEmbeddingsMeshRef = useRef();
@@ -593,14 +635,17 @@ function CartesianSpace({
 					</Html>
 				);
 			})}
-			<axesHelper args={[155]} />
+			<FullAxes size={155} />
 			<gridHelper args={[320, 32, '#43515f', '#24313d']} />
 			<OrbitControls
 				enableDamping
 				dampingFactor={0.08}
 				makeDefault
+				autoRotate={isIntroOrbiting}
+				autoRotateSpeed={1}
 				maxDistance={700}
 				minDistance={70}
+				onStart={onCameraInteraction}
 			/>
 		</>
 	)
