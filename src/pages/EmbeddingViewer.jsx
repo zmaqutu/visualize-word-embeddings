@@ -2,6 +2,7 @@ import CartesianSpace from '../components/CartesianSpace';
 import LoadingScreen from '../components/LoadingScreen';
 import useWordEmbeddings from '../hooks/useWordEmbeddings';
 import { Canvas } from '@react-three/fiber';
+import { Stats } from '@react-three/drei';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSpring, a, to } from '@react-spring/web';
 import {
@@ -1555,6 +1556,7 @@ function EmbeddingViewer() {
 							}}
 							onCameraInteraction={() => setIsIntroOrbiting(false)}
 						/>
+						<Stats className="embedding-stats" />
 					</Canvas>
 
 					{activeMode === 'arithmetic' && shouldRevealAnalogyResult && (
