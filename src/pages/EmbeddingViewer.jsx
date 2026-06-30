@@ -1584,7 +1584,6 @@ function EmbeddingViewer() {
 		setSearchTerm('');
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
-		setIsHeatmapEnabled(false);
 		setPointCount(Math.min(DEFAULT_POINT_COUNT, embeddings.length || DEFAULT_POINT_COUNT));
 		setShareStatus('');
 		if (typeof window !== 'undefined') {
@@ -1677,7 +1676,7 @@ function EmbeddingViewer() {
 							presentationRunId={presentationRunId}
 							isIntroOrbiting={isIntroOrbiting}
 							heatmapScores={heatmapScores}
-							heatmapFocusId={isHeatmapEnabled ? focusedEmbedding?.id : undefined}
+							heatmapFocusId={isHeatmapEnabled ? heatmapFocusEmbedding?.id : undefined}
 							onHover={setHoveredEmbedding}
 							onSelect={(embedding) => {
 								setIsIntroOrbiting(false);

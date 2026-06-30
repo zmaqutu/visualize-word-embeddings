@@ -461,12 +461,12 @@ function CartesianSpace({
 				isPathWord,
 				isVisibleCandidate,
 			});
-			const heatmapScaleBoost = isHeatmapMode
+			const heatmapScaleBoost = isHeatmapMode && !isActive
 				? THREE.MathUtils.lerp(0.58, 2.15, heatmapStrength ** 1.15)
 				: 1;
 			const scale = baseScale * inactiveFocusScale * heatmapScaleBoost * (isActive ? activeScaleBoost : 1);
 
-			if (isHeatmapMode) {
+			if (isHeatmapMode && !isActive) {
 				heatColor.copy(HEATMAP_COLD_COLOR);
 				if (heatmapStrength < 0.32) {
 					heatColor.lerp(HEATMAP_COOL_COLOR, heatmapStrength / 0.32);
@@ -479,7 +479,7 @@ function CartesianSpace({
 				}
 				colorScratch.copy(heatColor);
 			} else {
-				colorScratch.copy(color).lerp(dimColor, isFocusMode && !isActive ? focusProgress : 0);
+				colorScratch.copy(color).lerp(dimColor, isFocusMode && !isHeatmapMode && !isActive ? focusProgress : 0);
 			}
 			matrix.compose(position, rotation, new THREE.Vector3(scale, scale, scale));
 			wordEmbeddingsMesh.setColorAt(index, colorScratch);
