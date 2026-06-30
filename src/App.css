@@ -360,6 +360,40 @@ input {
   font-weight: 800;
 }
 
+.view-toggle-dock {
+  position: absolute;
+  right: 50%;
+  bottom: 24px;
+  z-index: 18;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 260px));
+  gap: 10px;
+  transform: translateX(50%);
+}
+
+.view-toggle-dock .heatmap-card,
+.view-toggle-dock .neighborhood-card {
+  padding: 10px;
+  border-color: rgba(177, 199, 218, 0.18);
+  background: rgba(13, 23, 32, 0.72);
+  box-shadow: 0 18px 56px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(16px);
+}
+
+.view-toggle-dock .heatmap-card.is-active,
+.view-toggle-dock .neighborhood-card.is-active {
+  border-color: rgba(134, 239, 172, 0.34);
+}
+
+.view-toggle-dock .heatmap-card strong,
+.view-toggle-dock .neighborhood-card strong {
+  font-size: 0.78rem;
+}
+
+.view-toggle-dock .heatmap-gradient {
+  height: 6px;
+}
+
 .neighborhood-halo-label {
   padding: 5px 8px;
   border: 1px solid rgba(134, 239, 172, 0.34);

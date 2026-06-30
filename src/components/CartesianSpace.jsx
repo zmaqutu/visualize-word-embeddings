@@ -92,7 +92,8 @@ function FullAxes({ size = 155 }) {
 
 function NeighborhoodHalo({ embeddings, focusWord }) {
 	const groupRef = useRef();
-	const haloPoints = useMemo(() => {
+	const tracerRef = useRef();
+	const haloShape = useMemo(() => {
 		if (embeddings.length < 3) return [];
 
 		const center = embeddings.reduce((sum, embedding) => {
@@ -119,27 +120,75 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 			});
 	}, [embeddings]);
 
-	const labelPosition = useMemo(() => {
-		if (haloPoints.length === 0) return [0, 0, 0];
+	const haloPoints = useMemo(() => {
+		if (haloShape.length < 3) return [];
 
-		const topPoint = haloPoints.reduce((top, point) => (
+		return new THREE.CatmullRomCurve3(haloShape, true, 'centripetal').getPoints(96);
+	}, [haloShape]);
+
+	const fillGeometry = useMemo(() => {
+		if (haloShape.length < 3) return null;
+
+		const center = haloShape.reduce((sum, point) => sum.add(point), new THREE.Vector3()).divideScalar(haloShape.length);
+		const positions = [];
+
+		for (let index = 0; index < haloShape.length; index += 1) {
+			const current = haloShape[index];
+			const next = haloShape[(index + 1) % haloShape.length];
+			positions.push(
+				center.x, center.y - 0.6, center.z,
+				current.x, current.y - 0.25, current.z,
+				next.x, next.y - 0.25, next.z,
+			);
+		}
+
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+		geometry.computeVertexNormals();
+		return geometry;
+	}, [haloShape]);
+
+	const labelPosition = useMemo(() => {
+		if (haloShape.length === 0) return [0, 0, 0];
+
+		const topPoint = haloShape.reduce((top, point) => (
 			point.y > top.y ? point : top
-		), haloPoints[0]);
+		), haloShape[0]);
 
 		return [topPoint.x, topPoint.y + 7, topPoint.z];
-	}, [haloPoints]);
+	}, [haloShape]);
 
 	useFrame(({ clock }) => {
 		if (!groupRef.current) return;
 
 		groupRef.current.rotation.y = Math.sin(clock.elapsedTime * 0.7) * 0.025;
 		groupRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 1.5) * 0.025);
+
+		if (tracerRef.current && haloPoints.length > 0) {
+			const pointIndex = Math.floor((clock.elapsedTime * 26) % haloPoints.length);
+			tracerRef.current.position.copy(haloPoints[pointIndex]);
+		}
 	});
+
+	useEffect(() => () => {
+		fillGeometry?.dispose();
+	}, [fillGeometry]);
 
 	if (haloPoints.length < 3) return null;
 
 	return (
 		<group ref={groupRef}>
+			{fillGeometry && (
+				<mesh geometry={fillGeometry}>
+					<meshBasicMaterial
+						color="#22c55e"
+						transparent
+						opacity={0.1}
+						side={THREE.DoubleSide}
+						depthWrite={false}
+					/>
+				</mesh>
+			)}
 			<Line
 				points={haloPoints}
 				closed
@@ -156,6 +205,16 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 				transparent
 				opacity={0.18}
 			/>
+			<Trail
+				width={5}
+				length={24}
+				color="#dcfce7"
+				attenuation={(t) => t * t}
+			>
+				<Sphere ref={tracerRef} args={[0.9, 16, 16]} position={haloPoints[0]}>
+					<meshBasicMaterial color="#dcfce7" transparent opacity={0.88} />
+				</Sphere>
+			</Trail>
 			<Html position={labelPosition} center zIndexRange={[80, 0]} className="neighborhood-halo-label">
 				{focusWord}
 				{' '}
@@ -391,11 +450,16 @@ function CartesianSpace({
 		return new Set(pathWordIds);
 	}, [pathWordIds]);
 
+	const neighborhoodHaloIdSet = useMemo(() => {
+		return new Set(neighborhoodHaloEmbeddings.map((embedding) => embedding.id));
+	}, [neighborhoodHaloEmbeddings]);
+
 	const isPathFocusMode = pathWordIds.length > 0;
 	const isCompareFocusMode = compareWordIds.length > 0;
 	const isAnalogyFocusMode = Number.isInteger(analogyResultId);
 	const isFocusMode = isAnalogyFocusMode || isCompareFocusMode || isPathFocusMode;
 	const isHeatmapMode = Boolean(heatmapScores && Number.isInteger(heatmapFocusId));
+	const isNeighborhoodHaloMode = neighborhoodHaloIdSet.size > 0;
 	const focusProgressRef = useRef(0);
 
 	const renderedEmbeddings = useMemo(() => {
@@ -461,7 +525,7 @@ function CartesianSpace({
 	useFrame((_, delta) => {
 		if (!wordEmbeddingsMesh) return;
 
-		const targetFocusProgress = isFocusMode ? 1 : 0;
+		const targetFocusProgress = isFocusMode || isNeighborhoodHaloMode ? 1 : 0;
 		focusProgressRef.current = THREE.MathUtils.damp(
 			focusProgressRef.current,
 			targetFocusProgress,
@@ -486,6 +550,7 @@ function CartesianSpace({
 			const isCompareWord = compareWordIdSet.has(embeddingId);
 			const isCompareNeighbor = compareNeighborIdSet.has(embeddingId);
 			const isPathWord = pathWordIdSet.has(embeddingId);
+			const isNeighborhoodHaloMember = neighborhoodHaloIdSet.has(embeddingId);
 			const isActive = embeddingId === selectedId
 				|| embeddingId === hoveredId
 				|| embeddingId === searchId
@@ -526,7 +591,9 @@ function CartesianSpace({
 				: 0;
 
 			position.set(...renderedEmbeddings[index].reducedVector);
-			const inactiveFocusScale = isFocusMode && !isActive
+			const shouldShrinkForFocus = isFocusMode && !isActive;
+			const shouldShrinkForHalo = isNeighborhoodHaloMode && !isNeighborhoodHaloMember;
+			const inactiveFocusScale = shouldShrinkForFocus || shouldShrinkForHalo
 				? THREE.MathUtils.lerp(1, 0.1, focusProgress)
 				: 1;
 			const baseScale = getPointScale({
@@ -541,7 +608,14 @@ function CartesianSpace({
 			const heatmapScaleBoost = isHeatmapMode && !isActive
 				? THREE.MathUtils.lerp(0.58, 2.15, heatmapStrength ** 1.15)
 				: 1;
-			const scale = baseScale * inactiveFocusScale * heatmapScaleBoost * (isActive ? activeScaleBoost : 1);
+			const haloMemberScale = isNeighborhoodHaloMode && isNeighborhoodHaloMember
+				? 1.28
+				: 1;
+			const scale = baseScale
+				* inactiveFocusScale
+				* heatmapScaleBoost
+				* haloMemberScale
+				* (isActive ? activeScaleBoost : 1);
 
 			if (isHeatmapMode && !isActive) {
 				heatColor.copy(HEATMAP_COLD_COLOR);

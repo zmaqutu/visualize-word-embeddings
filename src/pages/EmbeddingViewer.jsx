@@ -763,15 +763,6 @@ function EmbeddingViewer() {
 		vectorValues,
 		visibleCount,
 	]);
-	const heatmapNeighbors = useMemo(() => {
-		if (!isHeatmapEnabled || !heatmapFocusEmbedding || !heatmapScores) return [];
-
-		return Array.from(heatmapScores.entries())
-			.filter(([id]) => id !== heatmapFocusEmbedding.id)
-			.map(([id, score]) => ({ ...embeddings[id], score }))
-			.sort((left, right) => right.score - left.score)
-			.slice(0, 8);
-	}, [embeddings, heatmapFocusEmbedding, heatmapScores, isHeatmapEnabled]);
 	const neighborhoodHaloEmbeddings = useMemo(() => {
 		if (!isNeighborhoodHaloEnabled || !heatmapFocusEmbedding) return [];
 
@@ -1769,6 +1760,43 @@ function EmbeddingViewer() {
 				</div>
 			)}
 
+			{shouldRenderExperience && (
+				<div className="view-toggle-dock" aria-label="Visual layer controls">
+					<div className={`heatmap-card ${isHeatmapEnabled ? 'is-active' : ''}`}>
+						<div>
+							<span>Similarity heatmap</span>
+							<strong>{heatmapFocusEmbedding ? `Around ${heatmapFocusEmbedding.word}` : 'Choose a word'}</strong>
+						</div>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={isHeatmapEnabled}
+							onClick={handleHeatmapToggle}
+						>
+							<span aria-hidden="true" />
+							{isHeatmapEnabled ? 'On' : 'Off'}
+						</button>
+						<div className="heatmap-gradient" aria-hidden="true" />
+					</div>
+
+					<div className={`neighborhood-card ${isNeighborhoodHaloEnabled ? 'is-active' : ''}`}>
+						<div>
+							<span>Neighborhood halo</span>
+							<strong>{heatmapFocusEmbedding ? `${neighborhoodHaloEmbeddings.length || 0} nearest words` : 'Choose a word'}</strong>
+						</div>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={isNeighborhoodHaloEnabled}
+							onClick={handleNeighborhoodHaloToggle}
+						>
+							<span aria-hidden="true" />
+							{isNeighborhoodHaloEnabled ? 'On' : 'Off'}
+						</button>
+					</div>
+				</div>
+			)}
+
 			{!showLoader && (
 				<a.div
 					className={`tutorial-backdrop ${isTutorialOpen ? 'is-open' : 'is-docked'}`}
@@ -2405,60 +2433,6 @@ function EmbeddingViewer() {
 					<strong>{focusedEmbedding?.word || 'Hover or search'}</strong>
 					{searchTerm && !searchMatch && (
 						<small>No visible match yet</small>
-					)}
-				</div>
-
-				<div className={`heatmap-card ${isHeatmapEnabled ? 'is-active' : ''}`}>
-					<div>
-						<span>Similarity heatmap</span>
-						<strong>{heatmapFocusEmbedding ? `Around ${heatmapFocusEmbedding.word}` : 'Choose a word'}</strong>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={isHeatmapEnabled}
-						onClick={handleHeatmapToggle}
-					>
-						<span aria-hidden="true" />
-						{isHeatmapEnabled ? 'On' : 'Off'}
-					</button>
-					<div className="heatmap-gradient" aria-hidden="true" />
-					{isHeatmapEnabled && heatmapNeighbors.length > 0 && (
-						<ol>
-							{heatmapNeighbors.map((neighbor) => (
-								<li key={neighbor.id}>
-									<span>{neighbor.word}</span>
-									<small>{neighbor.score.toFixed(3)}</small>
-								</li>
-							))}
-						</ol>
-					)}
-					{isHeatmapEnabled && !heatmapFocusEmbedding && (
-						<small>Search or click a word to paint the cloud.</small>
-					)}
-				</div>
-
-				<div className={`neighborhood-card ${isNeighborhoodHaloEnabled ? 'is-active' : ''}`}>
-					<div>
-						<span>Neighborhood halo</span>
-						<strong>{heatmapFocusEmbedding ? `${neighborhoodHaloEmbeddings.length || 0} nearest words` : 'Choose a word'}</strong>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={isNeighborhoodHaloEnabled}
-						onClick={handleNeighborhoodHaloToggle}
-					>
-						<span aria-hidden="true" />
-						{isNeighborhoodHaloEnabled ? 'On' : 'Off'}
-					</button>
-					{isNeighborhoodHaloEnabled && heatmapFocusEmbedding && (
-						<small>
-							Looping around
-							{' '}
-							{heatmapFocusEmbedding.word}
-							&apos;s closest visible neighborhood.
-						</small>
 					)}
 				</div>
 
