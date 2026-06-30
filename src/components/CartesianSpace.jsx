@@ -461,12 +461,12 @@ function CartesianSpace({
 				isPathWord,
 				isVisibleCandidate,
 			});
-			const heatmapScaleBoost = isHeatmapMode && !isActive
+			const heatmapScaleBoost = isHeatmapMode
 				? THREE.MathUtils.lerp(0.58, 2.15, heatmapStrength ** 1.15)
 				: 1;
 			const scale = baseScale * inactiveFocusScale * heatmapScaleBoost * (isActive ? activeScaleBoost : 1);
 
-			if (isHeatmapMode && !isActive) {
+			if (isHeatmapMode) {
 				heatColor.copy(HEATMAP_COLD_COLOR);
 				if (heatmapStrength < 0.32) {
 					heatColor.lerp(HEATMAP_COOL_COLOR, heatmapStrength / 0.32);

@@ -407,7 +407,7 @@ function EmbeddingViewer() {
 	const [isIntroOrbiting, setIsIntroOrbiting] = useState(true);
 	const [isBackgroundAudioPlaying, setIsBackgroundAudioPlaying] = useState(false);
 	const [audioStatus, setAudioStatus] = useState('');
-	const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
+	const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(true);
 	const hasAppliedSharedView = useRef(false);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
@@ -731,11 +731,15 @@ function EmbeddingViewer() {
 	}, [pathRevealStep, semanticPath]);
 
 	const focusedEmbedding = selectedEmbedding || searchMatch || hoveredEmbedding;
+	const heatmapFocusEmbedding = focusedEmbedding
+		|| (activeMode === 'arithmetic' ? analogyResult : null)
+		|| (activeMode === 'compare' ? compareLeftMatch : null)
+		|| (activeMode === 'path' ? pathStartMatch : null);
 	const heatmapScores = useMemo(() => {
-		if (!isHeatmapEnabled || !focusedEmbedding || !vectorValues || vectorDimensions === 0 || vectorNorms.length === 0) return null;
+		if (!isHeatmapEnabled || !heatmapFocusEmbedding || !vectorValues || vectorDimensions === 0 || vectorNorms.length === 0) return null;
 
 		const scores = new Map();
-		const sourceOffset = focusedEmbedding.id * vectorDimensions;
+		const sourceOffset = heatmapFocusEmbedding.id * vectorDimensions;
 
 		for (let index = 0; index < visibleCount; index += 1) {
 			let dotProduct = 0;
@@ -745,13 +749,13 @@ function EmbeddingViewer() {
 				dotProduct += vectorValues[sourceOffset + dimension] * vectorValues[targetOffset + dimension];
 			}
 
-			const score = dotProduct / ((vectorNorms[focusedEmbedding.id] || 1) * (vectorNorms[index] || 1));
+			const score = dotProduct / ((vectorNorms[heatmapFocusEmbedding.id] || 1) * (vectorNorms[index] || 1));
 			scores.set(index, score);
 		}
 
 		return scores;
 	}, [
-		focusedEmbedding,
+		heatmapFocusEmbedding,
 		isHeatmapEnabled,
 		vectorDimensions,
 		vectorNorms,
@@ -759,14 +763,14 @@ function EmbeddingViewer() {
 		visibleCount,
 	]);
 	const heatmapNeighbors = useMemo(() => {
-		if (!isHeatmapEnabled || !focusedEmbedding || !heatmapScores) return [];
+		if (!isHeatmapEnabled || !heatmapFocusEmbedding || !heatmapScores) return [];
 
 		return Array.from(heatmapScores.entries())
-			.filter(([id]) => id !== focusedEmbedding.id)
+			.filter(([id]) => id !== heatmapFocusEmbedding.id)
 			.map(([id, score]) => ({ ...embeddings[id], score }))
 			.sort((left, right) => right.score - left.score)
 			.slice(0, 8);
-	}, [embeddings, focusedEmbedding, heatmapScores, isHeatmapEnabled]);
+	}, [embeddings, heatmapFocusEmbedding, heatmapScores, isHeatmapEnabled]);
 	const arithmeticExpression = `${analogyLeftMatch?.word || analogyLeft || '?'} - ${analogySubtractMatch?.word || analogySubtract || '?'} + ${analogyRightMatch?.word || analogyRight || '?'}`;
 	const draftArithmeticExpression = `${draftAnalogyLeftMatch?.word || analogyLeft || '?'} - ${draftAnalogySubtractMatch?.word || analogySubtract || '?'} + ${draftAnalogyRightMatch?.word || analogyRight || '?'}`;
 	const compareExpression = `${compareLeftMatch?.word || compareLeft || '?'} -> ${compareRightMatch?.word || compareRight || '?'}`;
@@ -2380,7 +2384,7 @@ function EmbeddingViewer() {
 				<div className={`heatmap-card ${isHeatmapEnabled ? 'is-active' : ''}`}>
 					<div>
 						<span>Similarity heatmap</span>
-						<strong>{focusedEmbedding ? `Around ${focusedEmbedding.word}` : 'Choose a word'}</strong>
+						<strong>{heatmapFocusEmbedding ? `Around ${heatmapFocusEmbedding.word}` : 'Choose a word'}</strong>
 					</div>
 					<button
 						type="button"
@@ -2402,7 +2406,7 @@ function EmbeddingViewer() {
 							))}
 						</ol>
 					)}
-					{isHeatmapEnabled && !focusedEmbedding && (
+					{isHeatmapEnabled && !heatmapFocusEmbedding && (
 						<small>Search or click a word to paint the cloud.</small>
 					)}
 				</div>
