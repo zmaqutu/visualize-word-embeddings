@@ -177,58 +177,6 @@ function InsightPanel({ insight }) {
 	);
 }
 
-function WordInspector({ embedding, neighbors, onClose, onUseWord, onSelectNeighbor }) {
-	if (!embedding) return null;
-
-	return (
-		<aside className="word-inspector" aria-label="Word inspector">
-			<div className="word-inspector-header">
-				<div>
-					<span>Word inspector</span>
-					<strong>{embedding.word}</strong>
-				</div>
-				<button type="button" onClick={onClose} aria-label="Close word inspector">X</button>
-			</div>
-			<div className="word-inspector-metrics">
-				<div>
-					<span>Index</span>
-					<strong>{embedding.id.toLocaleString()}</strong>
-				</div>
-				<div>
-					<span>Visible</span>
-					<strong>{embedding.reducedVector ? 'Yes' : 'No'}</strong>
-				</div>
-			</div>
-			<div className="word-action-grid">
-				<button type="button" onClick={() => onUseWord('compare-left', embedding.word)}>Compare A</button>
-				<button type="button" onClick={() => onUseWord('compare-right', embedding.word)}>Compare B</button>
-				<button type="button" onClick={() => onUseWord('path-start', embedding.word)}>Path start</button>
-				<button type="button" onClick={() => onUseWord('path-end', embedding.word)}>Path end</button>
-				<button type="button" onClick={() => onUseWord('analogy-left', embedding.word)}>+ first</button>
-				<button type="button" onClick={() => onUseWord('analogy-subtract', embedding.word)}>- subtract</button>
-				<button type="button" onClick={() => onUseWord('analogy-right', embedding.word)}>+ second</button>
-			</div>
-			<div className="word-neighbors">
-				<span>Nearest words</span>
-				{neighbors.length > 0 ? (
-					<ol>
-						{neighbors.map((neighbor) => (
-							<li key={neighbor.id}>
-								<button type="button" onClick={() => onSelectNeighbor(neighbor)}>
-									<strong>{neighbor.word}</strong>
-									<small>{neighbor.score.toFixed(3)}</small>
-								</button>
-							</li>
-						))}
-					</ol>
-				) : (
-					<p>No neighbors available yet.</p>
-				)}
-			</div>
-		</aside>
-	);
-}
-
 function TutorialPreview({ type }) {
 	if (type === 'visible') {
 		return (
@@ -792,17 +740,6 @@ function EmbeddingViewer() {
 	const revealedPathExpression = revealedSemanticPath.length > 0
 		? revealedSemanticPath.map((embedding) => embedding.word).join(' -> ')
 		: `${pathStartMatch?.word || pathStart || '?'} -> ${pathEndMatch?.word || pathEnd || '?'}`;
-	const inspectorEmbedding = selectedEmbedding || searchMatch;
-	const inspectorNeighbors = useMemo(() => {
-		return findNearestNeighbors({
-			embedding: inspectorEmbedding,
-			embeddings,
-			vectorValues,
-			vectorDimensions,
-			vectorNorms,
-			limit: 6,
-		});
-	}, [embeddings, inspectorEmbedding, vectorDimensions, vectorNorms, vectorValues]);
 	const shareUrl = useMemo(() => {
 		if (typeof window === 'undefined') return '';
 
@@ -1389,51 +1326,6 @@ function EmbeddingViewer() {
 		setPresentationRunId((currentRunId) => currentRunId + 1);
 	};
 
-	const handleUseInspectedWord = (target, word) => {
-		setIsIntroOrbiting(false);
-
-		if (target.startsWith('compare')) {
-			setActiveMode('compare');
-			if (target === 'compare-left') {
-				setCompareLeft(word);
-			} else {
-				setCompareRight(word);
-			}
-			return;
-		}
-
-		if (target.startsWith('path')) {
-			setActiveMode('path');
-			if (target === 'path-start') {
-				setPathStart(word);
-			} else {
-				setPathEnd(word);
-			}
-			return;
-		}
-
-		setActiveMode('arithmetic');
-		if (target === 'analogy-left') {
-			setAnalogyLeft(word);
-		} else if (target === 'analogy-subtract') {
-			setAnalogySubtract(word);
-		} else {
-			setAnalogyRight(word);
-		}
-	};
-
-	const handleSelectInspectorNeighbor = (neighbor) => {
-		setIsIntroOrbiting(false);
-		setSelectedEmbedding(neighbor);
-		setSearchTerm(neighbor.word);
-		if (neighbor.id >= pointCount) {
-			setPointCount(Math.min(
-				embeddings.length,
-				Math.ceil((neighbor.id + 1) / 500) * 500,
-			));
-		}
-	};
-
 	const presentAnalogy = (leftMatch, subtractMatch, rightMatch) => {
 		setIsIntroOrbiting(false);
 		setActiveMode('arithmetic');
@@ -1727,19 +1619,9 @@ function EmbeddingViewer() {
 						</div>
 					)}
 
-					{(activeInsight || inspectorEmbedding) && (
+					{activeInsight && (
 						<div className="semantic-rail">
 							<InsightPanel insight={activeInsight} />
-							<WordInspector
-								embedding={inspectorEmbedding}
-								neighbors={inspectorNeighbors}
-								onClose={() => {
-									setSelectedEmbedding(null);
-									setSearchTerm('');
-								}}
-								onUseWord={handleUseInspectedWord}
-								onSelectNeighbor={handleSelectInspectorNeighbor}
-							/>
 						</div>
 					)}
 				</>
