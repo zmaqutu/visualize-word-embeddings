@@ -1591,6 +1591,7 @@ function EmbeddingViewer() {
 							onHover={setHoveredEmbedding}
 							onSelect={(embedding) => {
 								setIsIntroOrbiting(false);
+								setSearchTerm('');
 								setSelectedEmbedding(embedding);
 							}}
 							onCameraInteraction={() => setIsIntroOrbiting(false)}
