@@ -679,7 +679,7 @@ function EmbeddingViewer() {
 		return semanticPath.slice(0, Math.min(pathRevealStep, semanticPath.length));
 	}, [pathRevealStep, semanticPath]);
 
-	const focusedEmbedding = selectedEmbedding || searchMatch || hoveredEmbedding;
+	const focusedEmbedding = searchMatch || selectedEmbedding || hoveredEmbedding;
 	const heatmapFocusEmbedding = focusedEmbedding
 		|| (activeMode === 'arithmetic' ? analogyResult : null)
 		|| (activeMode === 'compare' ? compareLeftMatch : null)
@@ -2287,6 +2287,7 @@ function EmbeddingViewer() {
 						value={searchTerm}
 						onChange={(event) => {
 							setIsIntroOrbiting(false);
+							setSelectedEmbedding(null);
 							setSearchTerm(event.target.value);
 						}}
 						placeholder="Try music, city, science..."

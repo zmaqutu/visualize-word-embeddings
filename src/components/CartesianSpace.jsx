@@ -179,7 +179,7 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 	return (
 		<group ref={groupRef}>
 			{fillGeometry && (
-				<mesh geometry={fillGeometry}>
+				<mesh geometry={fillGeometry} raycast={() => null}>
 					<meshBasicMaterial
 						color="#22c55e"
 						transparent
@@ -196,6 +196,7 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 				lineWidth={3}
 				transparent
 				opacity={0.88}
+				raycast={() => null}
 			/>
 			<Line
 				points={haloPoints}
@@ -204,6 +205,7 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 				lineWidth={10}
 				transparent
 				opacity={0.18}
+				raycast={() => null}
 			/>
 			<Trail
 				width={5}
@@ -211,7 +213,7 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 				color="#dcfce7"
 				attenuation={(t) => t * t}
 			>
-				<Sphere ref={tracerRef} args={[0.9, 16, 16]} position={haloPoints[0]}>
+				<Sphere ref={tracerRef} args={[0.9, 16, 16]} position={haloPoints[0]} raycast={() => null}>
 					<meshBasicMaterial color="#dcfce7" transparent opacity={0.88} />
 				</Sphere>
 			</Trail>
@@ -592,7 +594,7 @@ function CartesianSpace({
 
 			position.set(...renderedEmbeddings[index].reducedVector);
 			const shouldShrinkForFocus = isFocusMode && !isActive;
-			const shouldShrinkForHalo = isNeighborhoodHaloMode && !isNeighborhoodHaloMember;
+			const shouldShrinkForHalo = isNeighborhoodHaloMode && !isNeighborhoodHaloMember && !isActive;
 			const inactiveFocusScale = shouldShrinkForFocus || shouldShrinkForHalo
 				? THREE.MathUtils.lerp(1, 0.1, focusProgress)
 				: 1;
