@@ -31,6 +31,7 @@ const getBasePath = () => (import.meta.env.BASE_URL.endsWith('/')
 	: `${import.meta.env.BASE_URL}/`);
 const BACKGROUND_AUDIO_SRC = `${getBasePath()}audio/blinded-me-with-science.webm`;
 const BACKGROUND_AUDIO_VOLUME = 0.34;
+const LOADER_EXIT_DELAY_MS = 3650;
 const PATH_PRESETS = [
 	{ id: 'creative', label: 'creative', start: 'music', end: 'art' },
 	{ id: 'royalty-path', label: 'royalty', start: 'king', end: 'queen' },
@@ -1092,8 +1093,8 @@ function EmbeddingViewer() {
 	const activeTutorialSlide = TUTORIAL_SLIDES[tutorialSlide];
 
 	const loaderProps = useSpring({
-		opacity: loading ? 1 : 0,
-		transform: loading ? 'translateY(0%)' : 'translateY(-100%)',
+		opacity: showLoader ? 1 : 0,
+		transform: showLoader ? 'translateY(0%)' : 'translateY(-100%)',
 		config: { tension: 170, friction: 26 },
 	});
 	const tutorialCardProps = useSpring({
@@ -1112,7 +1113,7 @@ function EmbeddingViewer() {
 			return undefined;
 		}
 
-		const timeoutId = window.setTimeout(() => setShowLoader(false), 650);
+		const timeoutId = window.setTimeout(() => setShowLoader(false), LOADER_EXIT_DELAY_MS);
 		return () => window.clearTimeout(timeoutId);
 	}, [loading]);
 
