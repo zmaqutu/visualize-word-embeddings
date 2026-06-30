@@ -15,6 +15,11 @@ const COMPARE_WORD_COLOR = new THREE.Color('#fbbf24');
 const COMPARE_NEIGHBOR_COLOR = new THREE.Color('#76e4f7');
 const PATH_WORD_COLOR = new THREE.Color('#f472b6');
 const DIM_COLOR = new THREE.Color('#536170');
+const HEATMAP_COLD_COLOR = new THREE.Color('#151f3a');
+const HEATMAP_COOL_COLOR = new THREE.Color('#2563eb');
+const HEATMAP_WARM_COLOR = new THREE.Color('#22c55e');
+const HEATMAP_HOT_COLOR = new THREE.Color('#facc15');
+const HEATMAP_PEAK_COLOR = new THREE.Color('#ef4444');
 
 const getLabelLift = ({
 	isAnalogyInput,
@@ -265,6 +270,8 @@ function CartesianSpace({
 	analogyPresentationDone = false,
 	presentationRunId = 0,
 	isIntroOrbiting = false,
+	heatmapScores,
+	heatmapFocusId,
 	onHover,
 	onSelect,
 	onCameraInteraction,
@@ -311,9 +318,12 @@ function CartesianSpace({
 	const isCompareFocusMode = compareWordIds.length > 0;
 	const isAnalogyFocusMode = Number.isInteger(analogyResultId);
 	const isFocusMode = isAnalogyFocusMode || isCompareFocusMode || isPathFocusMode;
+	const isHeatmapMode = Boolean(heatmapScores && Number.isInteger(heatmapFocusId));
 	const focusProgressRef = useRef(0);
 
 	const renderedEmbeddings = useMemo(() => {
+		if (isHeatmapMode) return visibleEmbeddings;
+
 		if (isCompareFocusMode) {
 			return visibleEmbeddings.filter((embedding) => (
 				compareWordIdSet.has(embedding.id) || compareNeighborIdSet.has(embedding.id)
@@ -335,6 +345,7 @@ function CartesianSpace({
 		compareNeighborIdSet,
 		compareWordIdSet,
 		isCompareFocusMode,
+		isHeatmapMode,
 		isAnalogyFocusMode,
 		isPathFocusMode,
 		pathWordIdSet,
@@ -388,6 +399,7 @@ function CartesianSpace({
 		const activeScaleBoost = THREE.MathUtils.lerp(1, 1.12, focusProgress);
 		const dimColor = new THREE.Color('#15232d');
 		const colorScratch = new THREE.Color();
+		const heatColor = new THREE.Color();
 
 		for (let index = 0; index < renderedEmbeddings.length; index += 1) {
 			const embeddingId = renderedEmbeddings[index].id;
@@ -431,6 +443,10 @@ function CartesianSpace({
 													|| pathWordIdSet.size > 0
 													? DIM_COLOR
 													: BASE_COLOR;
+			const heatmapScore = isHeatmapMode ? heatmapScores.get(embeddingId) : undefined;
+			const heatmapStrength = Number.isFinite(heatmapScore)
+				? THREE.MathUtils.clamp((heatmapScore - 0.18) / 0.5, 0, 1)
+				: 0;
 
 			position.set(...renderedEmbeddings[index].reducedVector);
 			const inactiveFocusScale = isFocusMode && !isActive
@@ -445,8 +461,26 @@ function CartesianSpace({
 				isPathWord,
 				isVisibleCandidate,
 			});
-			const scale = baseScale * inactiveFocusScale * (isActive ? activeScaleBoost : 1);
-			colorScratch.copy(color).lerp(dimColor, isFocusMode && !isActive ? focusProgress : 0);
+			const heatmapScaleBoost = isHeatmapMode && !isActive
+				? THREE.MathUtils.lerp(0.58, 2.15, heatmapStrength ** 1.15)
+				: 1;
+			const scale = baseScale * inactiveFocusScale * heatmapScaleBoost * (isActive ? activeScaleBoost : 1);
+
+			if (isHeatmapMode && !isActive) {
+				heatColor.copy(HEATMAP_COLD_COLOR);
+				if (heatmapStrength < 0.32) {
+					heatColor.lerp(HEATMAP_COOL_COLOR, heatmapStrength / 0.32);
+				} else if (heatmapStrength < 0.62) {
+					heatColor.copy(HEATMAP_COOL_COLOR).lerp(HEATMAP_WARM_COLOR, (heatmapStrength - 0.32) / 0.3);
+				} else if (heatmapStrength < 0.84) {
+					heatColor.copy(HEATMAP_WARM_COLOR).lerp(HEATMAP_HOT_COLOR, (heatmapStrength - 0.62) / 0.22);
+				} else {
+					heatColor.copy(HEATMAP_HOT_COLOR).lerp(HEATMAP_PEAK_COLOR, (heatmapStrength - 0.84) / 0.16);
+				}
+				colorScratch.copy(heatColor);
+			} else {
+				colorScratch.copy(color).lerp(dimColor, isFocusMode && !isActive ? focusProgress : 0);
+			}
 			matrix.compose(position, rotation, new THREE.Vector3(scale, scale, scale));
 			wordEmbeddingsMesh.setColorAt(index, colorScratch);
 			wordEmbeddingsMesh.setMatrixAt(index, matrix);

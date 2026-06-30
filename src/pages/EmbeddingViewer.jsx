@@ -407,6 +407,7 @@ function EmbeddingViewer() {
 	const [isIntroOrbiting, setIsIntroOrbiting] = useState(true);
 	const [isBackgroundAudioPlaying, setIsBackgroundAudioPlaying] = useState(false);
 	const [audioStatus, setAudioStatus] = useState('');
+	const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(false);
 	const hasAppliedSharedView = useRef(false);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
@@ -730,6 +731,42 @@ function EmbeddingViewer() {
 	}, [pathRevealStep, semanticPath]);
 
 	const focusedEmbedding = selectedEmbedding || searchMatch || hoveredEmbedding;
+	const heatmapScores = useMemo(() => {
+		if (!isHeatmapEnabled || !focusedEmbedding || !vectorValues || vectorDimensions === 0 || vectorNorms.length === 0) return null;
+
+		const scores = new Map();
+		const sourceOffset = focusedEmbedding.id * vectorDimensions;
+
+		for (let index = 0; index < visibleCount; index += 1) {
+			let dotProduct = 0;
+			const targetOffset = index * vectorDimensions;
+
+			for (let dimension = 0; dimension < vectorDimensions; dimension += 1) {
+				dotProduct += vectorValues[sourceOffset + dimension] * vectorValues[targetOffset + dimension];
+			}
+
+			const score = dotProduct / ((vectorNorms[focusedEmbedding.id] || 1) * (vectorNorms[index] || 1));
+			scores.set(index, score);
+		}
+
+		return scores;
+	}, [
+		focusedEmbedding,
+		isHeatmapEnabled,
+		vectorDimensions,
+		vectorNorms,
+		vectorValues,
+		visibleCount,
+	]);
+	const heatmapNeighbors = useMemo(() => {
+		if (!isHeatmapEnabled || !focusedEmbedding || !heatmapScores) return [];
+
+		return Array.from(heatmapScores.entries())
+			.filter(([id]) => id !== focusedEmbedding.id)
+			.map(([id, score]) => ({ ...embeddings[id], score }))
+			.sort((left, right) => right.score - left.score)
+			.slice(0, 8);
+	}, [embeddings, focusedEmbedding, heatmapScores, isHeatmapEnabled]);
 	const arithmeticExpression = `${analogyLeftMatch?.word || analogyLeft || '?'} - ${analogySubtractMatch?.word || analogySubtract || '?'} + ${analogyRightMatch?.word || analogyRight || '?'}`;
 	const draftArithmeticExpression = `${draftAnalogyLeftMatch?.word || analogyLeft || '?'} - ${draftAnalogySubtractMatch?.word || analogySubtract || '?'} + ${draftAnalogyRightMatch?.word || analogyRight || '?'}`;
 	const compareExpression = `${compareLeftMatch?.word || compareLeft || '?'} -> ${compareRightMatch?.word || compareRight || '?'}`;
@@ -1543,6 +1580,7 @@ function EmbeddingViewer() {
 		setSearchTerm('');
 		setHoveredEmbedding(null);
 		setSelectedEmbedding(null);
+		setIsHeatmapEnabled(false);
 		setPointCount(Math.min(DEFAULT_POINT_COUNT, embeddings.length || DEFAULT_POINT_COUNT));
 		setShareStatus('');
 		if (typeof window !== 'undefined') {
@@ -1587,6 +1625,11 @@ function EmbeddingViewer() {
 		await startBackgroundAudio();
 	};
 
+	const handleHeatmapToggle = () => {
+		setIsIntroOrbiting(false);
+		setIsHeatmapEnabled((isEnabled) => !isEnabled);
+	};
+
 	const shouldRenderExperience = hasStartedExperience || !isTutorialOpen;
 
 	return (
@@ -1629,6 +1672,8 @@ function EmbeddingViewer() {
 							analogyPresentationDone={activeMode === 'arithmetic' && isAnalogyPresentationDone}
 							presentationRunId={presentationRunId}
 							isIntroOrbiting={isIntroOrbiting}
+							heatmapScores={heatmapScores}
+							heatmapFocusId={isHeatmapEnabled ? focusedEmbedding?.id : undefined}
 							onHover={setHoveredEmbedding}
 							onSelect={(embedding) => {
 								setIsIntroOrbiting(false);
@@ -2329,6 +2374,36 @@ function EmbeddingViewer() {
 					<strong>{focusedEmbedding?.word || 'Hover or search'}</strong>
 					{searchTerm && !searchMatch && (
 						<small>No visible match yet</small>
+					)}
+				</div>
+
+				<div className={`heatmap-card ${isHeatmapEnabled ? 'is-active' : ''}`}>
+					<div>
+						<span>Similarity heatmap</span>
+						<strong>{focusedEmbedding ? `Around ${focusedEmbedding.word}` : 'Choose a word'}</strong>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={isHeatmapEnabled}
+						onClick={handleHeatmapToggle}
+					>
+						<span aria-hidden="true" />
+						{isHeatmapEnabled ? 'On' : 'Off'}
+					</button>
+					<div className="heatmap-gradient" aria-hidden="true" />
+					{isHeatmapEnabled && heatmapNeighbors.length > 0 && (
+						<ol>
+							{heatmapNeighbors.map((neighbor) => (
+								<li key={neighbor.id}>
+									<span>{neighbor.word}</span>
+									<small>{neighbor.score.toFixed(3)}</small>
+								</li>
+							))}
+						</ol>
+					)}
+					{isHeatmapEnabled && !focusedEmbedding && (
+						<small>Search or click a word to paint the cloud.</small>
 					)}
 				</div>
 

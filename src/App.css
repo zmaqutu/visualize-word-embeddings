@@ -163,6 +163,7 @@ input {
 .range-control span,
 .focus-readout span,
 .share-view-card span,
+.heatmap-card > div span,
 .analogy-card > span,
 .preset-drawer > span,
 .analogy-explanation span,
@@ -233,6 +234,120 @@ input {
   border: 1px solid rgba(118, 228, 247, 0.18);
   border-radius: 6px;
   background: rgba(118, 228, 247, 0.08);
+}
+
+.heatmap-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(177, 199, 218, 0.16);
+  border-radius: 6px;
+  background: rgba(7, 13, 18, 0.42);
+}
+
+.heatmap-card.is-active {
+  border-color: rgba(246, 214, 95, 0.34);
+  background:
+    linear-gradient(135deg, rgba(118, 228, 247, 0.08), rgba(251, 113, 133, 0.1)),
+    rgba(7, 13, 18, 0.48);
+}
+
+.heatmap-card > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.heatmap-card strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heatmap-card > button {
+  display: flex;
+  width: 70px;
+  height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid rgba(177, 199, 218, 0.2);
+  border-radius: 999px;
+  color: #b7c7d6;
+  background: rgba(15, 23, 32, 0.8);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.heatmap-card > button[aria-checked="true"] {
+  border-color: rgba(52, 211, 153, 0.44);
+  color: #dcfce7;
+  background: rgba(10, 45, 38, 0.84);
+}
+
+.heatmap-card > button span {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #536170;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+
+.heatmap-card > button[aria-checked="true"] span {
+  background: #86efac;
+}
+
+.heatmap-gradient {
+  grid-column: 1 / -1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #151f3a, #2563eb, #22c55e, #facc15, #ef4444);
+}
+
+.heatmap-card ol {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.heatmap-card li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  color: #eef5fb;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.heatmap-card li span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.heatmap-card small {
+  grid-column: 1 / -1;
+  color: #9fb4c9;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .share-view-card {
