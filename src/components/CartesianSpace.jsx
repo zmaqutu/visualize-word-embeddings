@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { Html, Line, OrbitControls, Sphere, Trail } from '@react-three/drei';
 import * as THREE from 'three';
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const BASE_COLOR = new THREE.Color('#f6d65f');
 const HOVER_COLOR = new THREE.Color('#76e4f7');
@@ -90,9 +90,20 @@ function FullAxes({ size = 155 }) {
 	return <lineSegments geometry={geometry} material={material} />;
 }
 
+const cloneVectorList = (points) => points.map((point) => point.clone());
+
+const fitVectorListLength = (points, length) => {
+	if (points.length === length) return cloneVectorList(points);
+	if (points.length === 0) return Array.from({ length }, () => new THREE.Vector3());
+
+	return Array.from({ length }, (_, index) => points[index % points.length].clone());
+};
+
 function NeighborhoodHalo({ embeddings, focusWord }) {
 	const groupRef = useRef();
 	const tracerRef = useRef();
+	const transitionRef = useRef(null);
+	const [displayedShape, setDisplayedShape] = useState([]);
 	const haloShape = useMemo(() => {
 		if (embeddings.length < 3) return [];
 
@@ -120,21 +131,45 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 			});
 	}, [embeddings]);
 
-	const haloPoints = useMemo(() => {
-		if (haloShape.length < 3) return [];
+	useEffect(() => {
+		if (haloShape.length < 3) {
+			transitionRef.current = null;
+			setDisplayedShape([]);
+			return;
+		}
 
-		return new THREE.CatmullRomCurve3(haloShape, true, 'centripetal').getPoints(96);
+		setDisplayedShape((currentShape) => {
+			if (currentShape.length < 3) {
+				transitionRef.current = null;
+				return cloneVectorList(haloShape);
+			}
+
+			transitionRef.current = {
+				from: fitVectorListLength(currentShape, haloShape.length),
+				to: cloneVectorList(haloShape),
+				startTime: null,
+				duration: 0.95,
+			};
+
+			return currentShape;
+		});
 	}, [haloShape]);
 
-	const fillGeometry = useMemo(() => {
-		if (haloShape.length < 3) return null;
+	const haloPoints = useMemo(() => {
+		if (displayedShape.length < 3) return [];
 
-		const center = haloShape.reduce((sum, point) => sum.add(point), new THREE.Vector3()).divideScalar(haloShape.length);
+		return new THREE.CatmullRomCurve3(displayedShape, true, 'centripetal').getPoints(96);
+	}, [displayedShape]);
+
+	const fillGeometry = useMemo(() => {
+		if (displayedShape.length < 3) return null;
+
+		const center = displayedShape.reduce((sum, point) => sum.add(point), new THREE.Vector3()).divideScalar(displayedShape.length);
 		const positions = [];
 
-		for (let index = 0; index < haloShape.length; index += 1) {
-			const current = haloShape[index];
-			const next = haloShape[(index + 1) % haloShape.length];
+		for (let index = 0; index < displayedShape.length; index += 1) {
+			const current = displayedShape[index];
+			const next = displayedShape[(index + 1) % displayedShape.length];
 			positions.push(
 				center.x, center.y - 0.6, center.z,
 				current.x, current.y - 0.25, current.z,
@@ -146,26 +181,50 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 		geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
 		geometry.computeVertexNormals();
 		return geometry;
-	}, [haloShape]);
+	}, [displayedShape]);
 
 	const labelPosition = useMemo(() => {
-		if (haloShape.length === 0) return [0, 0, 0];
+		if (displayedShape.length === 0) return [0, 0, 0];
 
-		const topPoint = haloShape.reduce((top, point) => (
+		const topPoint = displayedShape.reduce((top, point) => (
 			point.y > top.y ? point : top
-		), haloShape[0]);
+		), displayedShape[0]);
 
 		return [topPoint.x, topPoint.y + 7, topPoint.z];
-	}, [haloShape]);
+	}, [displayedShape]);
 
 	useFrame(({ clock }) => {
 		if (!groupRef.current) return;
 
+		const transition = transitionRef.current;
+		const isTransitioning = Boolean(transition);
 		groupRef.current.rotation.y = Math.sin(clock.elapsedTime * 0.7) * 0.025;
-		groupRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 1.5) * 0.025);
+		groupRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * (isTransitioning ? 2.5 : 1.5)) * (isTransitioning ? 0.045 : 0.025));
+
+		if (transition) {
+			if (transition.startTime === null) {
+				transition.startTime = clock.elapsedTime;
+			}
+
+			const rawProgress = THREE.MathUtils.clamp(
+				(clock.elapsedTime - transition.startTime) / transition.duration,
+				0,
+				1,
+			);
+			const easedProgress = 1 - ((1 - rawProgress) ** 3);
+
+			setDisplayedShape(transition.from.map((point, index) => (
+				point.clone().lerp(transition.to[index], easedProgress)
+			)));
+
+			if (rawProgress >= 1) {
+				transitionRef.current = null;
+			}
+		}
 
 		if (tracerRef.current && haloPoints.length > 0) {
-			const pointIndex = Math.floor((clock.elapsedTime * 26) % haloPoints.length);
+			const traceSpeed = isTransitioning ? 48 : 26;
+			const pointIndex = Math.floor((clock.elapsedTime * traceSpeed) % haloPoints.length);
 			tracerRef.current.position.copy(haloPoints[pointIndex]);
 		}
 	});
@@ -174,7 +233,7 @@ function NeighborhoodHalo({ embeddings, focusWord }) {
 		fillGeometry?.dispose();
 	}, [fillGeometry]);
 
-	if (haloPoints.length < 3) return null;
+	if (haloPoints.length < 3 || displayedShape.length < 3) return null;
 
 	return (
 		<group ref={groupRef}>
@@ -793,7 +852,7 @@ function CartesianSpace({
 				/>
 			))}
 			<NeighborhoodHalo
-				embeddings={neighborhoodHaloEmbeddings.filter((embedding) => visibleEmbeddingsById.has(embedding.id))}
+				embeddings={neighborhoodHaloEmbeddings}
 				focusWord={neighborhoodHaloFocusWord}
 			/>
 			{activeLabels.map((embedding) => {
