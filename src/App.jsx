@@ -8,6 +8,7 @@ const MIN_VIEWPORT_HEIGHT = 700
 const getCanRenderViewer = () => (
   window.innerWidth >= MIN_VIEWPORT_WIDTH
   && window.innerHeight >= MIN_VIEWPORT_HEIGHT
+  && window.innerWidth > window.innerHeight
 )
 
 function App() {
@@ -19,7 +20,11 @@ function App() {
     }
 
     window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    window.addEventListener('orientationchange', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('orientationchange', handleResize)
+    }
   }, [])
 
   if (!canRenderViewer) {
@@ -29,10 +34,10 @@ function App() {
           <span>Desktop experience</span>
           <h1>Open this on a laptop or desktop.</h1>
           <p>
-            This visualization needs a wider screen for the 3D map, controls, and relationship panels to stay usable.
+            This visualization needs a landscape screen for the 3D map, controls, and relationship panels to stay usable.
           </p>
           <small>
-            Minimum recommended size: {MIN_VIEWPORT_WIDTH}px wide by {MIN_VIEWPORT_HEIGHT}px tall.
+            Minimum recommended size: {MIN_VIEWPORT_WIDTH}px wide by {MIN_VIEWPORT_HEIGHT}px tall, in landscape orientation.
           </small>
         </section>
       </main>
