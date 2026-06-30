@@ -1328,6 +1328,7 @@ function EmbeddingViewer() {
 
 	const presentAnalogy = (leftMatch, subtractMatch, rightMatch) => {
 		setIsIntroOrbiting(false);
+		setIsNeighborhoodHaloEnabled(false);
 		setActiveMode('arithmetic');
 		setCalculatedCompare(null);
 		setCalculatedPath(null);
@@ -1369,6 +1370,7 @@ function EmbeddingViewer() {
 
 		setCalculatedAnalogy(null);
 		setCalculatedPath(null);
+		setIsNeighborhoodHaloEnabled(false);
 		setVisibleCandidateIds([]);
 		setPresentationStep(0);
 		setPathRevealStep(0);
@@ -1389,6 +1391,7 @@ function EmbeddingViewer() {
 		if (!canCompareWords) return;
 
 		setIsIntroOrbiting(false);
+		setIsNeighborhoodHaloEnabled(false);
 		setActiveMode('compare');
 		setCalculatedCompare({
 			left: draftCompareLeftMatch.word,
@@ -1418,6 +1421,7 @@ function EmbeddingViewer() {
 		if (!canFindPath) return;
 
 		setIsIntroOrbiting(false);
+		setIsNeighborhoodHaloEnabled(false);
 		setActiveMode('path');
 		setCalculatedPath({
 			start: draftPathStartMatch.word,
@@ -1437,6 +1441,7 @@ function EmbeddingViewer() {
 
 	const handlePathPresetSelect = (preset) => {
 		setIsIntroOrbiting(false);
+		setIsNeighborhoodHaloEnabled(false);
 		setPathStart(preset.start);
 		setPathEnd(preset.end);
 		setActiveMode('path');
