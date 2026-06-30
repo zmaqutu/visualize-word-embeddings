@@ -408,6 +408,7 @@ function EmbeddingViewer() {
 	const [isBackgroundAudioPlaying, setIsBackgroundAudioPlaying] = useState(false);
 	const [audioStatus, setAudioStatus] = useState('');
 	const [isHeatmapEnabled, setIsHeatmapEnabled] = useState(true);
+	const [isNeighborhoodHaloEnabled, setIsNeighborhoodHaloEnabled] = useState(false);
 	const hasAppliedSharedView = useRef(false);
 
 	const visibleCount = Math.min(pointCount, embeddings.length);
@@ -771,6 +772,26 @@ function EmbeddingViewer() {
 			.sort((left, right) => right.score - left.score)
 			.slice(0, 8);
 	}, [embeddings, heatmapFocusEmbedding, heatmapScores, isHeatmapEnabled]);
+	const neighborhoodHaloEmbeddings = useMemo(() => {
+		if (!isNeighborhoodHaloEnabled || !heatmapFocusEmbedding) return [];
+
+		return findNearestNeighbors({
+			embedding: heatmapFocusEmbedding,
+			embeddings: embeddings.slice(0, visibleCount),
+			vectorValues,
+			vectorDimensions,
+			vectorNorms,
+			limit: 12,
+		});
+	}, [
+		embeddings,
+		heatmapFocusEmbedding,
+		isNeighborhoodHaloEnabled,
+		vectorDimensions,
+		vectorNorms,
+		vectorValues,
+		visibleCount,
+	]);
 	const arithmeticExpression = `${analogyLeftMatch?.word || analogyLeft || '?'} - ${analogySubtractMatch?.word || analogySubtract || '?'} + ${analogyRightMatch?.word || analogyRight || '?'}`;
 	const draftArithmeticExpression = `${draftAnalogyLeftMatch?.word || analogyLeft || '?'} - ${draftAnalogySubtractMatch?.word || analogySubtract || '?'} + ${draftAnalogyRightMatch?.word || analogyRight || '?'}`;
 	const compareExpression = `${compareLeftMatch?.word || compareLeft || '?'} -> ${compareRightMatch?.word || compareRight || '?'}`;
@@ -1633,6 +1654,11 @@ function EmbeddingViewer() {
 		setIsHeatmapEnabled((isEnabled) => !isEnabled);
 	};
 
+	const handleNeighborhoodHaloToggle = () => {
+		setIsIntroOrbiting(false);
+		setIsNeighborhoodHaloEnabled((isEnabled) => !isEnabled);
+	};
+
 	const shouldRenderExperience = hasStartedExperience || !isTutorialOpen;
 
 	return (
@@ -1677,6 +1703,8 @@ function EmbeddingViewer() {
 							isIntroOrbiting={isIntroOrbiting}
 							heatmapScores={heatmapScores}
 							heatmapFocusId={isHeatmapEnabled ? heatmapFocusEmbedding?.id : undefined}
+							neighborhoodHaloEmbeddings={isNeighborhoodHaloEnabled ? neighborhoodHaloEmbeddings : []}
+							neighborhoodHaloFocusWord={heatmapFocusEmbedding?.word}
 							onHover={setHoveredEmbedding}
 							onSelect={(embedding) => {
 								setIsIntroOrbiting(false);
@@ -2407,6 +2435,30 @@ function EmbeddingViewer() {
 					)}
 					{isHeatmapEnabled && !heatmapFocusEmbedding && (
 						<small>Search or click a word to paint the cloud.</small>
+					)}
+				</div>
+
+				<div className={`neighborhood-card ${isNeighborhoodHaloEnabled ? 'is-active' : ''}`}>
+					<div>
+						<span>Neighborhood halo</span>
+						<strong>{heatmapFocusEmbedding ? `${neighborhoodHaloEmbeddings.length || 0} nearest words` : 'Choose a word'}</strong>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={isNeighborhoodHaloEnabled}
+						onClick={handleNeighborhoodHaloToggle}
+					>
+						<span aria-hidden="true" />
+						{isNeighborhoodHaloEnabled ? 'On' : 'Off'}
+					</button>
+					{isNeighborhoodHaloEnabled && heatmapFocusEmbedding && (
+						<small>
+							Looping around
+							{' '}
+							{heatmapFocusEmbedding.word}
+							&apos;s closest visible neighborhood.
+						</small>
 					)}
 				</div>
 

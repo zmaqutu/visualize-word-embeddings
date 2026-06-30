@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { Html, OrbitControls, Sphere, Trail } from '@react-three/drei';
+import { Html, Line, OrbitControls, Sphere, Trail } from '@react-three/drei';
 import * as THREE from 'three';
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -88,6 +88,81 @@ function FullAxes({ size = 155 }) {
 	}, [geometry, material]);
 
 	return <lineSegments geometry={geometry} material={material} />;
+}
+
+function NeighborhoodHalo({ embeddings, focusWord }) {
+	const groupRef = useRef();
+	const haloPoints = useMemo(() => {
+		if (embeddings.length < 3) return [];
+
+		const center = embeddings.reduce((sum, embedding) => {
+			sum.add(new THREE.Vector3(...embedding.reducedVector));
+			return sum;
+		}, new THREE.Vector3()).divideScalar(embeddings.length);
+
+		return embeddings
+			.map((embedding) => {
+				const point = new THREE.Vector3(...embedding.reducedVector);
+				return {
+					point,
+					angle: Math.atan2(point.z - center.z, point.x - center.x),
+				};
+			})
+			.sort((left, right) => left.angle - right.angle)
+			.map(({ point }) => {
+				const outward = point.clone().sub(center);
+				const length = outward.length();
+				if (length > 0) {
+					outward.normalize().multiplyScalar(Math.max(4, length * 0.12));
+				}
+				return point.add(outward).add(new THREE.Vector3(0, 2.5, 0));
+			});
+	}, [embeddings]);
+
+	const labelPosition = useMemo(() => {
+		if (haloPoints.length === 0) return [0, 0, 0];
+
+		const topPoint = haloPoints.reduce((top, point) => (
+			point.y > top.y ? point : top
+		), haloPoints[0]);
+
+		return [topPoint.x, topPoint.y + 7, topPoint.z];
+	}, [haloPoints]);
+
+	useFrame(({ clock }) => {
+		if (!groupRef.current) return;
+
+		groupRef.current.rotation.y = Math.sin(clock.elapsedTime * 0.7) * 0.025;
+		groupRef.current.scale.setScalar(1 + Math.sin(clock.elapsedTime * 1.5) * 0.025);
+	});
+
+	if (haloPoints.length < 3) return null;
+
+	return (
+		<group ref={groupRef}>
+			<Line
+				points={haloPoints}
+				closed
+				color="#86efac"
+				lineWidth={3}
+				transparent
+				opacity={0.88}
+			/>
+			<Line
+				points={haloPoints}
+				closed
+				color="#22c55e"
+				lineWidth={10}
+				transparent
+				opacity={0.18}
+			/>
+			<Html position={labelPosition} center zIndexRange={[80, 0]} className="neighborhood-halo-label">
+				{focusWord}
+				{' '}
+				neighborhood
+			</Html>
+		</group>
+	);
 }
 
 const beamVertexShader = `
@@ -272,6 +347,8 @@ function CartesianSpace({
 	isIntroOrbiting = false,
 	heatmapScores,
 	heatmapFocusId,
+	neighborhoodHaloEmbeddings = [],
+	neighborhoodHaloFocusWord,
 	onHover,
 	onSelect,
 	onCameraInteraction,
@@ -639,6 +716,10 @@ function CartesianSpace({
 					delay={index * 0.24}
 				/>
 			))}
+			<NeighborhoodHalo
+				embeddings={neighborhoodHaloEmbeddings.filter((embedding) => visibleEmbeddingsById.has(embedding.id))}
+				focusWord={neighborhoodHaloFocusWord}
+			/>
 			{activeLabels.map((embedding) => {
 				const isAnalogyInput = analogyInputIdSet.has(embedding.id);
 				const isAnalogyResult = embedding.id === analogyResultId;

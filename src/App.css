@@ -164,6 +164,7 @@ input {
 .focus-readout span,
 .share-view-card span,
 .heatmap-card > div span,
+.neighborhood-card > div span,
 .analogy-card > span,
 .preset-drawer > span,
 .analogy-explanation span,
@@ -236,7 +237,8 @@ input {
   background: rgba(118, 228, 247, 0.08);
 }
 
-.heatmap-card {
+.heatmap-card,
+.neighborhood-card {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px 12px;
@@ -247,20 +249,23 @@ input {
   background: rgba(7, 13, 18, 0.42);
 }
 
-.heatmap-card.is-active {
+.heatmap-card.is-active,
+.neighborhood-card.is-active {
   border-color: rgba(246, 214, 95, 0.34);
   background:
     linear-gradient(135deg, rgba(118, 228, 247, 0.08), rgba(251, 113, 133, 0.1)),
     rgba(7, 13, 18, 0.48);
 }
 
-.heatmap-card > div {
+.heatmap-card > div,
+.neighborhood-card > div {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.heatmap-card strong {
+.heatmap-card strong,
+.neighborhood-card strong {
   min-width: 0;
   overflow: hidden;
   color: #ffffff;
@@ -270,7 +275,8 @@ input {
   white-space: nowrap;
 }
 
-.heatmap-card > button {
+.heatmap-card > button,
+.neighborhood-card > button {
   display: flex;
   width: 70px;
   height: 34px;
@@ -288,13 +294,15 @@ input {
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
 }
 
-.heatmap-card > button[aria-checked="true"] {
+.heatmap-card > button[aria-checked="true"],
+.neighborhood-card > button[aria-checked="true"] {
   border-color: rgba(52, 211, 153, 0.44);
   color: #dcfce7;
   background: rgba(10, 45, 38, 0.84);
 }
 
-.heatmap-card > button span {
+.heatmap-card > button span,
+.neighborhood-card > button span {
   width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -302,7 +310,8 @@ input {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 }
 
-.heatmap-card > button[aria-checked="true"] span {
+.heatmap-card > button[aria-checked="true"] span,
+.neighborhood-card > button[aria-checked="true"] span {
   background: #86efac;
 }
 
@@ -343,11 +352,26 @@ input {
   white-space: nowrap;
 }
 
-.heatmap-card small {
+.heatmap-card small,
+.neighborhood-card small {
   grid-column: 1 / -1;
   color: #9fb4c9;
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.neighborhood-halo-label {
+  padding: 5px 8px;
+  border: 1px solid rgba(134, 239, 172, 0.34);
+  border-radius: 999px;
+  color: #dcfce7;
+  background: rgba(6, 78, 59, 0.72);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.32);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .share-view-card {
